@@ -22,7 +22,7 @@
       "last_update": "2026-09-17T16:20:00Z",
       "status": "completed",
       "blocked_by": null,
-      "handoff_path": null,
+      "handoff_path": "docs/reviews/GEMINI_DISTRIBUTION_ENGINE_PHASE2_AND_WEB_UI_REPORT_2026-09-17.md",
       "notes": "COMPLETED and verified: Executive Web Console UI wired for Distribution Engine; /api/clients, /api/templates, and /api/distribution/dispatch endpoints landed; tab switcher ([Ad & Research Engine] vs [Custom Mission]), client selector, template selector with real-time description, target keyword input, Native V2 vs Hermes V1 engine selector, and dry-run preview drawer added to HTML_TEMPLATE; attestation_chain.dispatch_admitted_task extra_claims support added and wired to task_runner; tests/test_web_ui.py and tests/test_web_ui_security.py green; full gate 95/95 suites green; zero-spend containment held."
     },
     {
