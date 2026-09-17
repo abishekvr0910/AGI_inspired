@@ -153,6 +153,20 @@ class WebConsoleTests(unittest.TestCase):
             self.assertTrue(batch_res["success"])
             self.assertEqual(batch_res["count"], 7)
 
+            # Test /api/clients/apex-roofing/dossier
+            code, _, body = request(server, "GET", "/api/clients/apex-roofing/dossier")
+            self.assertEqual(code, 200)
+            dossier_res = json.loads(body)
+            self.assertTrue(dossier_res["success"])
+            self.assertIn("Executive Strategy & Distribution Audit", dossier_res["dossier_markdown"])
+            self.assertIn("<!doctype html>", dossier_res["dossier_html"])
+            self.assertIn("campaign_summary", dossier_res)
+
+            # Test /api/clients/apex-roofing/export-csv
+            code, _, body = request(server, "GET", "/api/clients/apex-roofing/export-csv")
+            self.assertEqual(code, 200)
+            self.assertIn(b"Campaign,Ad Group,Keyword", body)
+
         # 2. Paused / ESTOP engaged: verify fail-closed live dispatch rejection
         with fixture(paused=True) as f, serving(f.gw) as server:
             client_profile.save_client_profile(sample_profile, root=f.root)

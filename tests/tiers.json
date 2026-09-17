@@ -32,7 +32,8 @@
     "test_distribution_templates",
     "test_distribution_cli",
     "test_native_worker",
-    "test_distribution_phase2"
+    "test_distribution_phase2",
+    "test_client_reporter"
   ],
   "containment": [
     "test_worker_sandbox",

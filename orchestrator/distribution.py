@@ -197,6 +197,11 @@ def main(argv: list[str] | None = None) -> int:
         default="hermes",
         help="Worker execution engine: 'hermes' (subprocess CLI) or 'native' (self-improving agent loop)",
     )
+    parser.add_argument(
+        "--compile-campaign",
+        action="store_true",
+        help="Compile client deliverables into Google Ads Editor bulk CSV and Strategy Dossier",
+    )
     parser.add_argument("--root", help=argparse.SUPPRESS)
     parser.add_argument("--runs-dir", help=argparse.SUPPRESS)
     parser.add_argument("--db-path", help=argparse.SUPPRESS)
@@ -236,6 +241,36 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.client:
         parser.error("--client is required to dispatch or preview a task (or use --list-clients / --list-templates)")
+
+    if args.compile_campaign:
+        import client_reporter
+        try:
+            res = client_reporter.compile_and_export_client_package(
+                args.client,
+                root=args.root,
+                db_path=args.db_path,
+                runs_dir=args.runs_dir,
+            )
+            if args.json:
+                print(json.dumps(res, indent=2))
+            else:
+                print(f"\n[CAMPAIGN COMPILED] Client: {res['display_name']} ({res['client_id']})")
+                print("=" * 60)
+                print(f"  * Google Ads Editor CSV: {res['csv_path']}")
+                print(f"  * Campaign JSON:        {res['json_path']}")
+                print(f"  * Strategy Dossier (MD): {res['dossier_md_path']}")
+                print(f"  * Strategy Dossier(HTML):{res['dossier_html_path']}")
+                print(f"  * Ad Groups:            {res['campaign_summary']['ad_groups_count']}")
+                print(f"  * Total Keywords:       {res['campaign_summary']['total_keywords']}")
+                print(f"  * Total Negatives:      {res['campaign_summary']['total_negatives']}")
+                print("=" * 60 + "\n")
+            return 0
+        except Exception as exc:
+            if args.json:
+                print(json.dumps({"error": str(exc)}, indent=2))
+            else:
+                print(f"\n[ERROR] Campaign compilation failed: {exc}\n")
+            return 1
 
     if not args.template:
         parser.error("--template is required (or use --template all)")

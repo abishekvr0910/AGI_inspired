@@ -291,6 +291,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
               </button>
             </div>
 
+            <button type="button" id="btn-dist-compile" onclick="handleCompileCampaign()" class="w-full mt-2 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-indigo-700/80 font-bold text-xs uppercase tracking-wider transition flex items-center justify-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              Generate Strategy Dossier & Ads Editor CSV
+            </button>
+
             <div id="dist-preview-area" class="hidden mt-2 p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono max-h-48 overflow-y-auto space-y-2">
               <div class="flex items-center justify-between font-bold">
                 <span id="dist-preview-title" class="text-cyan-400">Preview</span>
@@ -809,6 +814,44 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
     }
 
+    async function handleCompileCampaign() {
+      const clientSelect = document.getElementById('dist-client');
+      const clientId = clientSelect.value;
+      if (!clientId) {
+        alert('Please select a client profile first');
+        return;
+      }
+      const previewArea = document.getElementById('dist-preview-area');
+      const previewTitle = document.getElementById('dist-preview-title');
+      const previewContent = document.getElementById('dist-preview-content');
+
+      previewArea.classList.remove('hidden');
+      previewTitle.textContent = `COMPILING CAMPAIGN & DOSSIER: ${clientId.toUpperCase()}`;
+      previewContent.textContent = 'Compiling research findings, building Single-Theme Ad Groups (STAGs), and exporting Google Ads Editor CSV...';
+
+      const res = await fetchAPI(`/api/clients/${encodeURIComponent(clientId)}/dossier`);
+      if (!res || !res.success) {
+        previewContent.textContent = 'Compilation failed: ' + (res?.error || 'Unknown error');
+        return;
+      }
+
+      const summary = res.campaign_summary || {};
+      previewTitle.textContent = `CAMPAIGN COMPILED: ${res.display_name} (${clientId})`;
+      previewContent.innerHTML = `
+        <div class="space-y-2">
+          <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between">
+            <div>
+              <span class="text-emerald-400 font-bold">Campaign:</span> ${escapeHTML(summary.campaign_name || 'Standard')}
+              <br><span class="text-slate-400">Ad Groups:</span> ${summary.ad_groups_count || 0} | <span class="text-slate-400">Keywords:</span> ${summary.total_keywords || 0} | <span class="text-slate-400">Negatives:</span> ${summary.total_negatives || 0}
+            </div>
+            <a href="/api/clients/${encodeURIComponent(clientId)}/export-csv" target="_blank" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-black font-extrabold text-xs transition">Download Bulk CSV</a>
+          </div>
+          <div class="font-bold text-cyan-400 mt-2">Executive Strategy Dossier:</div>
+          <div class="whitespace-pre-wrap text-slate-300 max-h-36 overflow-y-auto p-2 bg-slate-950 rounded border border-slate-800/80">${escapeHTML((res.dossier_markdown || '').substring(0, 1500))}...</div>
+        </div>
+      `;
+    }
+
     async function engageEstop() {
       if (!confirm('Engage ESTOP? Resume requires the controlled-window CLI.')) return;
 
@@ -1085,6 +1128,58 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
             ]
             self._send_json({"templates": templates})
             return
+
+        if path.startswith("/api/clients/") and path.endswith("/dossier"):
+            parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "clients" and parts[3] == "dossier":
+                client_id = parts[2].strip()
+                root_path = _get_root_from_gateway(gw)
+                try:
+                    import client_reporter
+                    res = client_reporter.compile_and_export_client_package(
+                        client_id,
+                        root=root_path,
+                        db_path=gw.ledger_db,
+                        runs_dir=gw.runs_dir,
+                    )
+                    dossier_md = Path(res["dossier_md_path"]).read_text(encoding="utf-8")
+                    dossier_html = Path(res["dossier_html_path"]).read_text(encoding="utf-8")
+                    self._send_json({
+                        "success": True,
+                        "client_id": client_id,
+                        "display_name": res["display_name"],
+                        "dossier_markdown": dossier_md,
+                        "dossier_html": dossier_html,
+                        "campaign_summary": res["campaign_summary"],
+                        "deliverables_found": res["deliverables_found"],
+                    })
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                return
+
+        if path.startswith("/api/clients/") and path.endswith("/export-csv"):
+            parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "clients" and parts[3] == "export-csv":
+                client_id = parts[2].strip()
+                root_path = _get_root_from_gateway(gw)
+                try:
+                    import client_reporter
+                    res = client_reporter.compile_and_export_client_package(
+                        client_id,
+                        root=root_path,
+                        db_path=gw.ledger_db,
+                        runs_dir=gw.runs_dir,
+                    )
+                    csv_bytes = Path(res["csv_path"]).read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/csv; charset=utf-8")
+                    self.send_header("Content-Disposition", f'attachment; filename="{client_id}_google_ads_editor.csv"')
+                    self.send_header("Content-Length", str(len(csv_bytes)))
+                    self.end_headers()
+                    self.wfile.write(csv_bytes)
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                return
 
         self._send_json({"error": "not found"}, status=404)
 
