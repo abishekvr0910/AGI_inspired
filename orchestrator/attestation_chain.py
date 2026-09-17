@@ -259,6 +259,7 @@ def dispatch_admitted_task(
     max_budget_usd: float | None = None,
     max_tokens: int | None = None,
     budget_enforcement: str = "admission_parameters_only",
+    **extra_claims: Any,
 ) -> int:
     """Admit and queue a task with genuine DSSE DISPATCH provenance before commit.
 
@@ -275,6 +276,7 @@ def dispatch_admitted_task(
                 client_id=client_id,
                 max_budget_usd=max_budget_usd, max_tokens=max_tokens,
                 budget_enforcement=budget_enforcement,
+                **extra_claims,
             )
         finally:
             conn.close()
@@ -294,6 +296,7 @@ def dispatch_admitted_task(
         "max_budget_usd": max_budget_usd,
         "max_tokens": max_tokens,
         "budget_enforcement": budget_enforcement,
+        **extra_claims,
     }
     append_step(Path(runs_dir), Step.DISPATCH, task_id, 1, claims)
     conn.commit()

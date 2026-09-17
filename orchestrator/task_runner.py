@@ -439,15 +439,22 @@ def _run_research_task(context: _TaskContext) -> str:
     chained = chain.existing(rc.RUNS, tid, row)
     control_paths = (notebook_path, chain.chain_path(rc.RUNS, tid))
     client_id = row.get("client_id")
-    if client_id is None and chained:
+    worker_engine = None
+    if chained:
         try:
             for payload in chain.read_payloads(rc.RUNS, tid):
                 if payload.get("step") == chain.Step.DISPATCH.value:
-                    client_id = payload.get("claims", {}).get("client_id")
-                    if client_id:
-                        break
+                    claims = payload.get("claims", {})
+                    if client_id is None:
+                        client_id = claims.get("client_id")
+                    worker_engine = claims.get("worker_engine")
+                    break
         except Exception:
             pass
+
+    if worker_engine:
+        worker_cfg = dict(worker_cfg)
+        worker_cfg["worker_engine"] = worker_engine
 
     notebook = Notebook.load(notebook_path) or Notebook()
     if notebook.attempts_seen:

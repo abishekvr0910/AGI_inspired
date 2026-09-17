@@ -74,6 +74,7 @@ def dispatch_distribution_task(
     seed_input: dict[str, Any] | None = None,
     *,
     dry_run: bool = False,
+    worker_engine: str = "hermes",
     root: Path | str | None = None,
     runs_dir: Path | str | None = None,
     db_path: Path | str | None = None,
@@ -95,6 +96,7 @@ def dispatch_distribution_task(
             "client_id": client_id,
             "template": template_name,
             "surface": template_info["surface"],
+            "worker_engine": worker_engine,
             "dry_run": True,
             "spec": spec,
             "pass_criteria": criteria,
@@ -124,12 +126,14 @@ def dispatch_distribution_task(
         spec=spec,
         pass_criteria=criteria,
         client_id=client_id,
+        worker_engine=worker_engine,
     )
 
     return {
         "client_id": client_id,
         "template": template_name,
         "surface": template_info["surface"],
+        "worker_engine": worker_engine,
         "dry_run": False,
         "task_id": task_id,
         "mission_id": "distribution",
@@ -144,11 +148,12 @@ def dispatch_all_templates(
     seed_input: dict[str, Any] | None = None,
     *,
     dry_run: bool = False,
+    worker_engine: str = "hermes",
     root: Path | str | None = None,
     runs_dir: Path | str | None = None,
     db_path: Path | str | None = None,
 ) -> list[dict[str, Any]]:
-    """Dispatch all 5 distribution templates for a client in sequence."""
+    """Dispatch all 7 distribution templates for a client in sequence."""
     results = []
     for t_name in TEMPLATES:
         res = dispatch_distribution_task(
@@ -156,6 +161,7 @@ def dispatch_all_templates(
             t_name,
             seed_input=seed_input,
             dry_run=dry_run,
+            worker_engine=worker_engine,
             root=root,
             runs_dir=runs_dir,
             db_path=db_path,
@@ -184,6 +190,12 @@ def main(argv: list[str] | None = None) -> int:
         "--intent",
         choices=["commercial", "transactional", "informational", "navigational"],
         help="Optional search intent override",
+    )
+    parser.add_argument(
+        "--worker-engine",
+        choices=["hermes", "native"],
+        default="hermes",
+        help="Worker execution engine: 'hermes' (subprocess CLI) or 'native' (self-improving agent loop)",
     )
     parser.add_argument("--root", help=argparse.SUPPRESS)
     parser.add_argument("--runs-dir", help=argparse.SUPPRESS)
@@ -244,6 +256,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.client,
                 seed_input=seed_input or None,
                 dry_run=args.dry_run,
+                worker_engine=args.worker_engine,
                 root=args.root,
                 runs_dir=args.runs_dir,
                 db_path=args.db_path,
@@ -252,7 +265,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(results, indent=2))
             else:
                 mode_str = "[DRY-RUN PREVIEW]" if args.dry_run else "[ADMITTED & QUEUED]"
-                print(f"\n{mode_str} Dispatched 5 research tasks for client '{args.client}':")
+                print(f"\n{mode_str} Dispatched {len(results)} research tasks for client '{args.client}':")
                 for r in results:
                     tid_info = f"task_id={r.get('task_id')}" if not args.dry_run else "dry-run"
                     print(f"  • {r['template']:<22} -> {tid_info}")
@@ -263,6 +276,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.template,
                 seed_input=seed_input or None,
                 dry_run=args.dry_run,
+                worker_engine=args.worker_engine,
                 root=args.root,
                 runs_dir=args.runs_dir,
                 db_path=args.db_path,

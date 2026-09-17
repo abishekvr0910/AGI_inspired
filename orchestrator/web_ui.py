@@ -30,8 +30,21 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "orchestrator"))
 
+import client_profile
+import distribution
 import execution_pause
 from trust_gateway import Gateway
+
+
+def _get_root_from_gateway(gw: Gateway) -> Path:
+    if hasattr(gw, "root_dir") and gw.root_dir:
+        return Path(gw.root_dir)
+    if hasattr(gw, "ledger_db") and gw.ledger_db:
+        db_path = Path(gw.ledger_db)
+        if db_path.parent.name == "ledger":
+            return db_path.parent.parent
+        return db_path.parent
+    return ROOT
 
 CONSOLE_CSS = Path(__file__).with_suffix(".css").read_text(encoding="utf-8")
 LOGGER = logging.getLogger(__name__)
@@ -228,7 +241,67 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             Interactive Mission Dispatch
           </h3>
 
-          <form id="dispatch-form" onsubmit="handleDispatch(event)" class="space-y-4">
+          <div class="flex items-center gap-1.5 mb-3 p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono">
+            <button type="button" id="tab-btn-dist" onclick="switchDispatchTab('dist')" class="flex-1 py-1.5 px-2 rounded-lg font-bold transition bg-cyan-950 text-cyan-300 border border-cyan-800/80">
+              Ad & Research Engine
+            </button>
+            <button type="button" id="tab-btn-custom" onclick="switchDispatchTab('custom')" class="flex-1 py-1.5 px-2 rounded-lg font-semibold text-slate-400 hover:text-slate-200 transition">
+              Custom Mission
+            </button>
+          </div>
+
+          <!-- Ad & Research Engine Dispatch Form -->
+          <form id="form-dist" onsubmit="event.preventDefault();" class="space-y-3">
+            <div>
+              <label class="block text-xs font-mono text-slate-400 mb-1">CLIENT PROFILE</label>
+              <select id="dist-client" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+                <option value="">Select client profile...</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-mono text-slate-400 mb-1">RESEARCH TEMPLATE</label>
+              <select id="dist-template" onchange="onTemplateChange()" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+                <option value="all">All 7 Research Templates (Batch Dispatch)</option>
+              </select>
+              <div id="dist-template-desc" class="text-[11px] text-slate-400 mt-1 font-mono italic"></div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-mono text-slate-400 mb-1">TARGET KEYWORD / SEED FOCUS (OPTIONAL)</label>
+              <input type="text" id="dist-target-keyword" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500" placeholder="e.g. commercial roofer austin">
+            </div>
+
+            <div>
+              <label class="block text-xs font-mono text-slate-400 mb-1">RESEARCH WORKER ENGINE</label>
+              <select id="dist-engine" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+                <option value="native" selected>Native V2 (Self-Improving Agent Loop)</option>
+                <option value="hermes">Hermes V1 (Subprocess CLI Loop)</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <button type="button" id="btn-dist-preview" onclick="handleDistributionDispatch(true)" class="py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-cyan-800/80 font-bold text-xs uppercase tracking-wider transition flex items-center justify-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                Preview (Dry Run)
+              </button>
+              <button type="button" id="btn-dist-dispatch" onclick="handleDistributionDispatch(false)" disabled class="py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-black font-extrabold text-xs uppercase tracking-wider transition shadow-lg shadow-cyan-600/20 flex items-center justify-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                Dispatch (Attested)
+              </button>
+            </div>
+
+            <div id="dist-preview-area" class="hidden mt-2 p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono max-h-48 overflow-y-auto space-y-2">
+              <div class="flex items-center justify-between font-bold">
+                <span id="dist-preview-title" class="text-cyan-400">Preview</span>
+                <button type="button" onclick="document.getElementById('dist-preview-area').classList.add('hidden')" class="text-slate-500 hover:text-slate-300">✕</button>
+              </div>
+              <div id="dist-preview-content" class="text-slate-300 whitespace-pre-wrap"></div>
+            </div>
+          </form>
+
+          <!-- Custom Mission Dispatch Form -->
+          <form id="dispatch-form" onsubmit="handleDispatch(event)" class="space-y-4 hidden">
             <div>
               <label class="block text-xs font-mono text-slate-400 mb-1">TASK SPECIFICATION / OBJECTIVE</label>
               <textarea id="disp-spec" rows="3" required class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2.5 text-xs font-mono text-white focus:outline-none focus:border-cyan-500 transition" placeholder="e.g. Research prompt marketplace metrics for PromptBase..."></textarea>
@@ -430,6 +503,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         badge.className = status.attestation_valid ? 'text-emerald-400' : 'text-red-400';
         document.getElementById('hdr-wfp').textContent = status.worker_identity || 'Unknown';
         document.getElementById('btn-dispatch-submit').disabled = status.estop_engaged;
+        const btnDist = document.getElementById('btn-dist-dispatch');
+        if (btnDist) btnDist.disabled = status.estop_engaged;
         document.getElementById('btn-estop').disabled = status.estop_engaged;
         document.getElementById('hdr-digest').innerText = (status.attestation_digest || 'none').substring(0, 12) + '...';
         document.getElementById('station-allowlist-count').innerText = `${status.allowed_hosts_count || 0} hosts`;
@@ -464,6 +539,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       if (graphData) {
         renderMirofishGraph(graphData);
       }
+
+      // 5. Distribution Config
+      loadDistributionConfig();
     }
 
     function renderTasks(tasks) {
@@ -612,6 +690,121 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         alert(`Mission queued as Task #${res.task_id} under fail-closed containment!`);
         document.getElementById('disp-spec').value = '';
         document.getElementById('disp-criteria').value = '';
+        refreshData();
+      }
+    }
+
+    function switchDispatchTab(tab) {
+      const isDist = tab === 'dist';
+      document.getElementById('form-dist').classList.toggle('hidden', !isDist);
+      document.getElementById('dispatch-form').classList.toggle('hidden', isDist);
+      document.getElementById('tab-btn-dist').className = isDist
+        ? 'flex-1 py-1.5 px-2 rounded-lg font-bold transition bg-cyan-950 text-cyan-300 border border-cyan-800/80'
+        : 'flex-1 py-1.5 px-2 rounded-lg font-semibold text-slate-400 hover:text-slate-200 transition';
+      document.getElementById('tab-btn-custom').className = !isDist
+        ? 'flex-1 py-1.5 px-2 rounded-lg font-bold transition bg-cyan-950 text-cyan-300 border border-cyan-800/80'
+        : 'flex-1 py-1.5 px-2 rounded-lg font-semibold text-slate-400 hover:text-slate-200 transition';
+    }
+
+    let loadedClients = null;
+    let loadedTemplates = null;
+
+    async function loadDistributionConfig() {
+      if (!loadedClients) {
+        const res = await fetchAPI('/api/clients');
+        if (res && res.clients) {
+          loadedClients = res.clients;
+          const select = document.getElementById('dist-client');
+          if (loadedClients.length === 0) {
+            select.innerHTML = '<option value="">No client profiles found in workspace/clients/</option>';
+          } else {
+            select.innerHTML = '<option value="">Select a client profile...</option>' +
+              loadedClients.map(c => `<option value="${escapeHTML(c.client_id)}">${escapeHTML(c.display_name)} (${escapeHTML(c.client_id)})</option>`).join('');
+          }
+        }
+      }
+
+      if (!loadedTemplates) {
+        const res = await fetchAPI('/api/templates');
+        if (res && res.templates) {
+          loadedTemplates = res.templates;
+          const select = document.getElementById('dist-template');
+          let opts = '<option value="all">All 7 Research Templates (Batch Dispatch)</option>';
+          opts += loadedTemplates.map(t => `<option value="${escapeHTML(t.id)}">${escapeHTML(t.name)} [${escapeHTML(t.surface)}]</option>`).join('');
+          select.innerHTML = opts;
+          onTemplateChange();
+        }
+      }
+    }
+
+    function onTemplateChange() {
+      if (!loadedTemplates) return;
+      const val = document.getElementById('dist-template').value;
+      const descEl = document.getElementById('dist-template-desc');
+      if (val === 'all') {
+        descEl.textContent = 'Batch dispatch of all 7 templates under separate DSSE Step.DISPATCH attestation records.';
+        return;
+      }
+      const match = loadedTemplates.find(t => t.id === val);
+      if (match) {
+        descEl.textContent = `[${match.surface}] ${match.description}`;
+      } else {
+        descEl.textContent = '';
+      }
+    }
+
+    async function handleDistributionDispatch(dryRun) {
+      const clientId = document.getElementById('dist-client').value;
+      const template = document.getElementById('dist-template').value;
+      const targetKeyword = document.getElementById('dist-target-keyword').value.trim();
+      const workerEngine = document.getElementById('dist-engine').value;
+
+      if (!clientId) {
+        alert('Please select a client profile first.');
+        return;
+      }
+      if (!template) {
+        alert('Please select a research template.');
+        return;
+      }
+
+      const payload = {
+        client_id: clientId,
+        template: template,
+        dry_run: dryRun,
+        worker_engine: workerEngine,
+      };
+      if (targetKeyword) {
+        payload.target_keyword = targetKeyword;
+      }
+
+      const res = await fetchAPI('/api/distribution/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res) return;
+
+      const previewArea = document.getElementById('dist-preview-area');
+      const previewTitle = document.getElementById('dist-preview-title');
+      const previewContent = document.getElementById('dist-preview-content');
+
+      if (dryRun) {
+        previewArea.classList.remove('hidden');
+        previewTitle.textContent = `DRY RUN PREVIEW: ${template.toUpperCase()} (${workerEngine.toUpperCase()})`;
+        if (res.results) {
+          previewContent.textContent = JSON.stringify(res.results, null, 2);
+        } else {
+          previewContent.textContent = `=== OBJECTIVE ===\n${res.spec}\n\n=== PASS CRITERIA ===\n${res.pass_criteria}`;
+        }
+      } else {
+        if (res.results) {
+          alert(`Successfully admitted ${res.count} research tasks into ledger under DSSE Step.DISPATCH records!`);
+        } else if (res.task_id) {
+          alert(`Research task queued as Task #${res.task_id} under DSSE Step.DISPATCH record!`);
+        }
+        previewArea.classList.add('hidden');
         refreshData();
       }
     }
@@ -855,6 +1048,44 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
             self._send_json({"nodes": nodes, "links": links})
             return
 
+        if path == "/api/clients":
+            root_path = _get_root_from_gateway(gw)
+            client_ids = client_profile.list_client_profiles(root=root_path)
+            clients = []
+            for cid in client_ids:
+                try:
+                    prof = client_profile.load_client_profile(cid, root=root_path)
+                    clients.append({
+                        "client_id": cid,
+                        "display_name": prof.get("display_name", cid),
+                        "domain": prof.get("domain", ""),
+                        "geo": prof.get("geo", []),
+                        "language": prof.get("language", []),
+                    })
+                except Exception:
+                    clients.append({
+                        "client_id": cid,
+                        "display_name": cid,
+                        "domain": "",
+                        "geo": [],
+                        "language": [],
+                    })
+            self._send_json({"clients": clients})
+            return
+
+        if path == "/api/templates":
+            templates = [
+                {
+                    "id": name,
+                    "name": name,
+                    "description": info["description"],
+                    "surface": info["surface"],
+                }
+                for name, info in distribution.TEMPLATES.items()
+            ]
+            self._send_json({"templates": templates})
+            return
+
         self._send_json({"error": "not found"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -887,6 +1118,62 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
                                        max_budget_usd=payload.get("max_budget_usd", 1.0),
                                        max_tokens=payload.get("max_tokens", 100000))
                 self._send_json(res)
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=400)
+            return
+
+        if path == "/api/distribution/dispatch":
+            client_id = str(payload.get("client_id") or "").strip()
+            template = str(payload.get("template") or "").strip()
+            if not client_id:
+                self._send_json({"error": "client_id is required"}, status=400)
+                return
+            if not template:
+                self._send_json({"error": "template is required"}, status=400)
+                return
+            if template != "all" and template not in distribution.TEMPLATES:
+                self._send_json({"error": f"unknown template: {template}"}, status=400)
+                return
+
+            dry_run = bool(payload.get("dry_run", False))
+            if not dry_run and execution_pause.pause_engaged():
+                self._send_json({"error": "ESTOP engaged - dispatch refused; use the controlled-window CLI"}, status=400)
+                return
+
+            worker_engine = str(payload.get("worker_engine") or "hermes").strip().lower()
+            if worker_engine not in ("hermes", "native"):
+                self._send_json({"error": f"invalid worker_engine: {worker_engine}"}, status=400)
+                return
+
+            seed_input = dict(payload.get("seed_input") or {})
+            if payload.get("target_keyword"):
+                seed_input["target_keyword"] = str(payload["target_keyword"]).strip()
+
+            root_path = _get_root_from_gateway(gw)
+            try:
+                if template == "all":
+                    results = distribution.dispatch_all_templates(
+                        client_id,
+                        seed_input=seed_input if seed_input else None,
+                        dry_run=dry_run,
+                        worker_engine=worker_engine,
+                        root=root_path,
+                        runs_dir=gw.runs_dir,
+                        db_path=gw.ledger_db,
+                    )
+                    self._send_json({"success": True, "results": results, "count": len(results)})
+                else:
+                    res = distribution.dispatch_distribution_task(
+                        client_id,
+                        template,
+                        seed_input=seed_input if seed_input else None,
+                        dry_run=dry_run,
+                        worker_engine=worker_engine,
+                        root=root_path,
+                        runs_dir=gw.runs_dir,
+                        db_path=gw.ledger_db,
+                    )
+                    self._send_json(res)
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=400)
             return

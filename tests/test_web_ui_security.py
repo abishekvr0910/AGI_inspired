@@ -20,8 +20,8 @@ class WebSecurityTests(unittest.TestCase):
             before = f.gw.policy_mgr.policy_path.read_bytes()
             sentinel = f.sentinel.read_bytes()
             routes = {
-                "GET": ("/", "/api/status", "/api/tasks", "/api/tasks/1", "/api/candidates", "/api/graph", "/unknown"),
-                "POST": ("/api/dispatch", "/api/estop", "/api/candidates/approve", "/api/candidates/reject", "/unknown"),
+                "GET": ("/", "/api/status", "/api/tasks", "/api/tasks/1", "/api/candidates", "/api/graph", "/api/clients", "/api/templates", "/unknown"),
+                "POST": ("/api/dispatch", "/api/distribution/dispatch", "/api/estop", "/api/candidates/approve", "/api/candidates/reject", "/unknown"),
             }
             with patch.object(f.gw.policy_mgr, "re_sign_attestation") as signer, patch.object(f.gw, "dispatch_task") as dispatch:
                 with self.assertLogs(web_ui.LOGGER, level="WARNING") as logs:
