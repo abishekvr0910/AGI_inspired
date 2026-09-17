@@ -268,13 +268,16 @@ def dispatch_admitted_task(
     """
     import sqlite3
     if isinstance(db_or_conn, (str, Path)):
-        with sqlite3.connect(str(db_or_conn), timeout=30) as conn:
+        conn = sqlite3.connect(str(db_or_conn), timeout=30)
+        try:
             return dispatch_admitted_task(
                 conn, runs_dir, mission_id, spec, pass_criteria,
                 client_id=client_id,
                 max_budget_usd=max_budget_usd, max_tokens=max_tokens,
                 budget_enforcement=budget_enforcement,
             )
+        finally:
+            conn.close()
 
     conn = db_or_conn
     cur = conn.execute(

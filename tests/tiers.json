@@ -29,7 +29,8 @@
     "test_cli_attestation_chain",
     "test_workspace_isolation",
     "test_distribution_keyword_research",
-    "test_distribution_templates"
+    "test_distribution_templates",
+    "test_distribution_cli"
   ],
   "containment": [
     "test_worker_sandbox",

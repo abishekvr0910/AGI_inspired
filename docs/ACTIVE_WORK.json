@@ -4,10 +4,11 @@
   "active_agents": [
     {
       "agent": "gemini-cli",
-      "role": "Distribution Engine: Phase 1 (Research Core, Zero-Spend) - Step 1b (4 Templates + Cleanups)",
-      "task_id": "DISTRIBUTION-ENGINE-PHASE1-1B-2026-09-17",
-      "mode": "implementation",
+      "role": "Distribution Engine: Phase 1 (Research Core, Zero-Spend) - CLI Dispatcher & Mechanism Completion",
+      "task_id": "DISTRIBUTION-ENGINE-PHASE1-CLI-2026-09-17",
+      "mode": "completed",
       "owned_paths": [
+        "orchestrator/distribution.py",
         "orchestrator/client_profile.py",
         "orchestrator/research_templates/__init__.py",
         "orchestrator/research_templates/keyword_research.py",
@@ -19,6 +20,7 @@
         "orchestrator/policy.py",
         "orchestrator/integrity.py",
         "orchestrator/task_runner.py",
+        "tests/test_distribution_cli.py",
         "tests/test_distribution_keyword_research.py",
         "tests/test_distribution_templates.py",
         "tests/tiers.json",
@@ -28,11 +30,11 @@
         "docs/reviews/GEMINI_DISTRIBUTION_ENGINE_PHASE1_1B_REPORT_2026-09-17.md"
       ],
       "started_at": "2026-09-17T04:25:00Z",
-      "last_update": "2026-09-17T04:40:00Z",
-      "status": "in_progress",
+      "last_update": "2026-09-17T09:40:00Z",
+      "status": "completed",
       "blocked_by": null,
       "handoff_path": "docs/reviews/GEMINI_DISTRIBUTION_ENGINE_PHASE1_1B_REPORT_2026-09-17.md",
-      "notes": "Step 1b COMPLETED and verified: Part A cleanups A1+A2 landed; Part B 4 templates (competitive_serp, ad_copy_variants, seo_content_brief, landing_page_recco) built and arming preflight; zero-spend 3-probe containment verified; ad_copy_variants end-to-end 5-step DSSE chain verified; gate 92/92 suites green (unit 77, containment 8, integration 7). Ready for Claude independent audit."
+      "notes": "COMPLETED and verified: Distribution CLI Dispatcher (orchestrator/distribution.py) and test suite (tests/test_distribution_cli.py) landed; all 5 research templates dispatchable via CLI and admitted with DSSE Step.DISPATCH records; list_client_profiles added; Windows SQLite connection lock fix in dispatch_admitted_task; zero-spend 3-probe containment verified; gate expanded to 93/93 suites green (unit 78, containment 8, integration 7) with zero FAIL lines. Phase 1 mechanism complete."
     },
     {
       "agent": "gemini-cli",

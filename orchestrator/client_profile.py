@@ -89,3 +89,21 @@ def save_client_profile(profile: dict[str, Any], root: Path | str | None = None)
     profile_path = cdir / "profile.json"
     profile_path.write_text(json.dumps(profile, indent=2) + "\n", encoding="utf-8")
     return profile_path
+
+
+def list_client_profiles(root: Path | str | None = None) -> list[str]:
+    """List all available client_ids that have a profile.json under workspace/clients/."""
+    if root is None:
+        try:
+            import runtime_context as rc
+            root = rc.ROOT
+        except Exception:
+            root = Path.cwd()
+    clients_dir = Path(root) / "workspace" / "clients"
+    if not clients_dir.is_dir():
+        return []
+    result = []
+    for d in clients_dir.iterdir():
+        if d.is_dir() and (d / "profile.json").is_file():
+            result.append(d.name)
+    return sorted(result)
