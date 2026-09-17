@@ -220,6 +220,126 @@ class NativeWorkerTests(unittest.TestCase):
                 native_worker.run_native_research_turn("Test query", model_cfg={})
             self.assertIn("global ESTOP is engaged", str(ctx.exception))
 
+    def test_call_provider_with_tools_estop(self):
+        """call_provider_with_tools refuses execution when ESTOP is engaged."""
+        with patch("native_worker.pause_engaged", return_value=True):
+            with self.assertRaises(RuntimeError) as ctx:
+                native_worker.call_provider_with_tools([], [], {"provider": "ollama", "model": "test"})
+            self.assertIn("global ESTOP is engaged", str(ctx.exception))
+
+    def test_call_provider_with_tools_ollama(self):
+        """call_provider_with_tools formats Ollama payload and returns message and tokens."""
+        mock_resp = MagicMock()
+        mock_resp.__enter__.return_value = mock_resp
+        mock_resp.read.return_value = json.dumps({
+            "message": {"role": "assistant", "content": "Ollama response"},
+            "prompt_eval_count": 42,
+            "eval_count": 18,
+        }).encode("utf-8")
+
+        with patch("native_worker.pause_engaged", return_value=False):
+            with patch("urllib.request.urlopen", return_value=mock_resp):
+                res = native_worker.call_provider_with_tools(
+                    messages=[{"role": "user", "content": "Hi"}],
+                    tools=[],
+                    model_cfg={"provider": "ollama", "model": "qwen3.5:2b", "endpoint": "http://127.0.0.1:11434/api/chat"},
+                )
+                self.assertEqual(res["message"]["content"], "Ollama response")
+                self.assertEqual(res["input_tokens"], 42)
+                self.assertEqual(res["output_tokens"], 18)
+
+    def test_call_provider_with_tools_openai(self):
+        """call_provider_with_tools formats OpenAI/BytePlus payload and returns choice message and tokens."""
+        mock_resp = MagicMock()
+        mock_resp.__enter__.return_value = mock_resp
+        mock_resp.read.return_value = json.dumps({
+            "choices": [{"message": {"role": "assistant", "content": "Frontier response"}}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 50},
+        }).encode("utf-8")
+
+        with patch("native_worker.pause_engaged", return_value=False):
+            with patch("urllib.request.urlopen", return_value=mock_resp):
+                res = native_worker.call_provider_with_tools(
+                    messages=[{"role": "user", "content": "Hi"}],
+                    tools=[],
+                    model_cfg={"provider": "openai", "model": "gpt-4o", "authentication_reference": "env:MOCK_KEY"},
+                )
+                self.assertEqual(res["message"]["content"], "Frontier response")
+                self.assertEqual(res["input_tokens"], 100)
+                self.assertEqual(res["output_tokens"], 50)
+
+    def test_call_provider_with_tools_unsupported(self):
+        """call_provider_with_tools raises ValueError on unknown provider."""
+        with patch("native_worker.pause_engaged", return_value=False):
+            with self.assertRaises(ValueError) as ctx:
+                native_worker.call_provider_with_tools([], [], {"provider": "unsupported_xyz"})
+            self.assertIn("Unsupported provider", str(ctx.exception))
+
+    def test_execution_seam_routing(self):
+        """worker_with_failover routes to hermes_worker by default and native_worker when configured."""
+        import execution
+
+        mock_hermes = MagicMock(return_value=("Hermes deliverable output that is long enough to pass length check cleanly.", {"total_tokens": 100}))
+        mock_native = MagicMock(return_value=("Native deliverable output that is long enough to pass length check cleanly.", {"total_tokens": 100}))
+
+        with patch("execution.hermes_worker", mock_hermes):
+            with patch("execution.native_worker", mock_native):
+                with tempfile.TemporaryDirectory() as td:
+                    usage_p = Path(td) / "task10_worker.usage.json"
+
+                    # 1. Default routing -> hermes_worker
+                    cfg_hermes = {"provider": "ollama", "model": "kimi-k2.7-code:cloud"}
+                    out, usage, _, _ = execution.worker_with_failover("Prompt", cfg_hermes, usage_p, "test")
+                    mock_hermes.assert_called_once()
+                    mock_native.assert_not_called()
+                    self.assertIn("Hermes deliverable", out)
+
+                    mock_hermes.reset_mock()
+                    mock_native.reset_mock()
+
+                    # 2. Config worker_engine="native" -> native_worker
+                    cfg_native = {"provider": "ollama", "model": "kimi-k2.7-code:cloud", "worker_engine": "native"}
+                    out, usage, _, _ = execution.worker_with_failover("Prompt", cfg_native, usage_p, "test")
+                    mock_native.assert_called_once()
+                    mock_hermes.assert_not_called()
+                    self.assertIn("Native deliverable", out)
+
+    def test_execution_native_worker_bridge(self):
+        """execution.native_worker bridge invokes native agent loop and writes usage."""
+        import execution
+
+        def mock_caller(messages, tools):
+            return {
+                "input_tokens": 150,
+                "output_tokens": 80,
+                "message": {
+                    "role": "assistant",
+                    "content": "### Research Summary\nVerified facts about roofing industry in Austin.",
+                },
+            }
+
+        with tempfile.TemporaryDirectory() as td:
+            temp_root = Path(td)
+            usage_p = temp_root / "task25_a1_worker.usage.json"
+            cfg = {
+                "provider": "mock",
+                "model": "mock-model",
+                "worker_engine": "native",
+                "custom_caller": mock_caller,
+            }
+
+            with patch("execution.pause_engaged", return_value=False):
+                with patch("native_worker.pause_engaged", return_value=False):
+                    out, usage = execution.native_worker(
+                        "Analyze market demand.",
+                        cfg,
+                        usage_p,
+                    )
+
+            self.assertIn("### Research Summary", out)
+            self.assertEqual(usage["total_tokens"], 230)
+            self.assertTrue(usage_p.is_file())
+
     def test_zero_spend_containment_three_probes(self):
         """3-probe test passes across native_worker and its test file."""
         sdk_forbidden = [
@@ -257,3 +377,4 @@ class NativeWorkerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

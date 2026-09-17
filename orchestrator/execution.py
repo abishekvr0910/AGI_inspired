@@ -49,6 +49,7 @@ import trajectory  # noqa: E402 — P0 unified task trace
 import egress_policy  # noqa: E402
 import worker_sandbox  # noqa: E402
 import yaml  # for load_fallback_chain()
+from execution_pause import pause_engaged  # noqa: E402
 
 # Module constants needed by the moved functions.
 WORKER_TIMEOUT_S = 1800
@@ -262,6 +263,69 @@ def hermes_worker(prompt: str, model_cfg: dict, usage_path: Path,
             if stderr_text:
                 usage["process_error"] = stderr_text.strip()[:2000]
             return stdout_text.strip(), usage
+
+
+def native_worker(prompt: str, model_cfg: dict, usage_path: Path,
+                  timeout: int = WORKER_TIMEOUT_S,
+                  retrieval_profile: str | None = None) -> tuple[str, dict]:
+    """Execute research worker using native agent loop (native_worker.py)."""
+    if pause_engaged():
+        raise RuntimeError("model execution refused: global ESTOP is engaged")
+
+    import native_worker as _nw
+    from egress_broker import ActiveBrokerCorrelation
+
+    base_env = dict(os.environ)
+    m = re.match(r"^task(\d+)(?:_a(\d+))?_", usage_path.name)
+    tid = int(m.group(1)) if m else None
+    if tid is None and base_env.get("HARNESS_TASK_ID"):
+        try:
+            tid = int(base_env["HARNESS_TASK_ID"])
+        except ValueError:
+            pass
+    attempt = int(m.group(2)) if m and m.group(2) else 1
+
+    notebook_path = None
+    if tid is not None:
+        notebook_path = ROOT / "runs" / f"task{tid}_notebook.json"
+
+    broker_audit_path = usage_path.parent / (
+        f"task{tid}_a{attempt}_broker.audit.jsonl" if tid else f"{usage_path.stem}_broker.audit.jsonl"
+    )
+    if "repair" not in usage_path.name:
+        broker_audit_path.unlink(missing_ok=True)
+
+    browser_cm = contextlib.nullcontext()
+    if retrieval_profile == "dynamic_browser_required":
+        from browser_daemon import ActiveBrowserDaemon
+        browser_cm = ActiveBrowserDaemon()
+
+    custom_caller = model_cfg.get("custom_caller")
+
+    try:
+        with browser_cm:
+            with ActiveBrokerCorrelation(usage_path.parent, tid, attempt, broker_audit_path):
+                out, usage = _nw.run_native_research_turn(
+                    prompt=prompt,
+                    model_cfg=model_cfg,
+                    usage_path=usage_path,
+                    task_id=tid,
+                    notebook_path=notebook_path,
+                    custom_caller=custom_caller,
+                )
+        return out, usage
+    except Exception as exc:
+        if pause_engaged():
+            raise
+        usage = {}
+        if usage_path.exists():
+            try:
+                usage = json.loads(usage_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        usage["failed"] = True
+        usage["process_error"] = str(exc)
+        return "", usage
 
 
 def ollama_chat(model: str, prompt: str, timeout: int = 300,
@@ -487,12 +551,18 @@ def worker_with_failover(prompt: str, worker_cfg: dict, usage_path: Path,
         attempt_path = usage_path if i == 0 else usage_path.with_name(
             f"{usage_path.stem}_fallback{i}{usage_path.suffix}")
         timeout = LOCAL_FALLBACK_TIMEOUT_S if _is_local_model(cfg) else WORKER_TIMEOUT_S
+        worker_engine = (
+            cfg.get("worker_engine")
+            or os.environ.get("HARNESS_WORKER_ENGINE")
+            or "hermes"
+        ).lower()
+        worker_fn = native_worker if worker_engine == "native" else hermes_worker
         if retrieval_profile:
-            out, usage = hermes_worker(
+            out, usage = worker_fn(
                 prompt, cfg, attempt_path, timeout=timeout,
                 retrieval_profile=retrieval_profile)
         else:
-            out, usage = hermes_worker(prompt, cfg, attempt_path, timeout=timeout)
+            out, usage = worker_fn(prompt, cfg, attempt_path, timeout=timeout)
         cfg_used = cfg
         failed = worker_failed(out, usage)
         if not failed:

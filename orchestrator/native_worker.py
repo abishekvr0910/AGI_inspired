@@ -320,6 +320,87 @@ def distill_research_skill(
     return note_path
 
 
+def call_provider_with_tools(
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    model_cfg: dict[str, Any],
+    timeout: float = 300,
+) -> dict[str, Any]:
+    """Execute one model turn with tool-calling schema via provider endpoint.
+
+    Fails closed immediately if pause_engaged() is True.
+    """
+    if pause_engaged():
+        raise RuntimeError("model execution refused: global ESTOP is engaged")
+
+    provider = str(model_cfg.get("provider", "ollama")).lower()
+    model = str(model_cfg.get("model", ""))
+
+    if provider == "ollama":
+        endpoint = model_cfg.get("endpoint") or "http://127.0.0.1:11434/api/chat"
+        body = {
+            "model": model,
+            "messages": messages,
+            "tools": tools,
+            "stream": False,
+        }
+        req = urllib.request.Request(
+            endpoint,
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            msg = payload.get("message", {})
+            return {
+                "message": msg,
+                "input_tokens": int(payload.get("prompt_eval_count") or 0),
+                "output_tokens": int(payload.get("eval_count") or 0),
+            }
+
+    elif provider in ("byteplus_coding", "openai"):
+        if provider == "byteplus_coding":
+            base = model_cfg.get("endpoint") or "https://ark.ap-southeast.bytepluses.com/api/coding/v3"
+            ref = model_cfg.get("authentication_reference") or "env:ARK_API_KEY"
+        else:
+            base = model_cfg.get("endpoint") or "https://api.openai.com/v1"
+            ref = model_cfg.get("authentication_reference") or "env:OPENAI_API_KEY"
+
+        base_endpoint = base.rstrip("/") + "/chat/completions"
+        import provider_chat
+        api_key = provider_chat.authentication_env_from_config({"authentication_reference": ref}).get(
+            ref.split(":")[-1] if ":" in ref else ref, ""
+        ) or os.environ.get(ref.split(":")[-1] if ":" in ref else ref, "")
+
+        body = {
+            "model": model,
+            "messages": messages,
+            "tools": tools,
+            "stream": False,
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+        req = urllib.request.Request(
+            base_endpoint,
+            data=json.dumps(body).encode("utf-8"),
+            headers=headers,
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            choice = payload["choices"][0]
+            msg = choice["message"]
+            usage = payload.get("usage", {})
+            return {
+                "message": msg,
+                "input_tokens": int(usage.get("prompt_tokens") or 0),
+                "output_tokens": int(usage.get("completion_tokens") or 0),
+            }
+    else:
+        raise ValueError(f"Unsupported provider for native tool loop: {provider}")
+
+
 def run_native_research_turn(
     prompt: str,
     model_cfg: dict[str, Any],
@@ -374,7 +455,7 @@ def run_native_research_turn(
             resp = custom_caller(messages, NATIVE_TOOLS)
         else:
             # Live caller via provider transport
-            raise NotImplementedError("live model provider execution requires configured provider endpoint")
+            resp = call_provider_with_tools(messages, NATIVE_TOOLS, model_cfg)
 
         in_tok = int(resp.get("input_tokens", 0))
         out_tok = int(resp.get("output_tokens", 0))
