@@ -199,30 +199,35 @@ def load_client_deliverables(
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         try:
-            rows = conn.execute(
-                "SELECT task_id, mission_id, status FROM tasks WHERE status = 'done' ORDER BY task_id ASC"
-            ).fetchall()
-            for r in rows:
-                tid = r["task_id"]
-                mid = str(r["mission_id"] or "")
-                # Check attestation claims for client_id
-                chain_file = runs_p / f"task{tid}.attestation.jsonl"
-                if chain_file.is_file():
-                    try:
-                        for line in chain_file.read_text(encoding="utf-8").splitlines():
-                            rec = json.loads(line)
-                            claims = rec.get("claims", {})
-                            if claims.get("client_id") == client_id:
-                                # Found matching task
-                                tmpl_key = mid.replace("dist-", "").strip().lower()
-                                raw_file = runs_p / f"task{tid}_a1_worker_raw.txt"
-                                if not raw_file.is_file():
-                                    raw_file = runs_p / f"task{tid}_worker_raw.txt"
-                                if raw_file.is_file() and tmpl_key not in deliverables:
-                                    deliverables[tmpl_key] = raw_file.read_text(encoding="utf-8", errors="replace")
-                                break
-                    except Exception:
-                        pass
+            cols = [c[1] for c in conn.execute("PRAGMA table_info(tasks)").fetchall()]
+            tid_col = "task_id" if "task_id" in cols else "id" if "id" in cols else None
+            mid_col = "mission_id" if "mission_id" in cols else None
+            if tid_col:
+                mid_sel = f", {mid_col}" if mid_col else ""
+                rows = conn.execute(
+                    f"SELECT {tid_col} as task_id{mid_sel}, status FROM tasks WHERE status = 'done' ORDER BY {tid_col} ASC"
+                ).fetchall()
+                for r in rows:
+                    tid = r["task_id"]
+                    mid = str(r[mid_col] or "") if mid_col else ""
+                    # Check attestation claims for client_id
+                    chain_file = runs_p / f"task{tid}.attestation.jsonl"
+                    if chain_file.is_file():
+                        try:
+                            for line in chain_file.read_text(encoding="utf-8").splitlines():
+                                rec = json.loads(line)
+                                claims = rec.get("claims", {})
+                                if claims.get("client_id") == client_id:
+                                    # Found matching task
+                                    tmpl_key = mid.replace("dist-", "").strip().lower()
+                                    raw_file = runs_p / f"task{tid}_a1_worker_raw.txt"
+                                    if not raw_file.is_file():
+                                        raw_file = runs_p / f"task{tid}_worker_raw.txt"
+                                    if raw_file.is_file() and tmpl_key not in deliverables:
+                                        deliverables[tmpl_key] = raw_file.read_text(encoding="utf-8", errors="replace")
+                                    break
+                        except Exception:
+                            pass
         finally:
             conn.close()
 

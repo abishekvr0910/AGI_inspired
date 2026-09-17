@@ -213,6 +213,20 @@ class NativeWorkerTests(unittest.TestCase):
             blocked_path = native_worker.distill_research_skill(102, "m2_pricing", hostile_text, root=temp_root)
             self.assertIsNone(blocked_path)
 
+    def test_load_active_research_skills(self):
+        """load_active_research_skills loads H7-safe lessons and formats tactics clause."""
+        with tempfile.TemporaryDirectory() as td:
+            temp_root = Path(td)
+            cand_dir = temp_root / "skills_analyst" / "_candidates"
+            cand_dir.mkdir(parents=True, exist_ok=True)
+
+            valid_skill = "# Research Lesson: m2_pricing (Task 101)\nDate: 2026-09-17\nKey grounded observation:\nFor pricing pages, look for annual discount toggle and table comparison cells.\n"
+            (cand_dir / "task101_m2_pricing_skill.md").write_text(valid_skill, encoding="utf-8")
+
+            clause = native_worker.load_active_research_skills(root=temp_root)
+            self.assertIn("Self-Improving Research Tactics", clause)
+            self.assertIn("For pricing pages, look for annual discount toggle", clause)
+
     def test_estop_enforcement(self):
         """run_native_research_turn refuses execution when ESTOP is engaged."""
         with patch("native_worker.pause_engaged", return_value=True):

@@ -202,6 +202,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Compile client deliverables into Google Ads Editor bulk CSV and Strategy Dossier",
     )
+    parser.add_argument(
+        "--auto-pipeline",
+        action="store_true",
+        help="Run full end-to-end client venture pipeline: dispatch all research templates, build STAG campaign, export Google Ads Editor CSV, and generate strategy dossier",
+    )
     parser.add_argument("--root", help=argparse.SUPPRESS)
     parser.add_argument("--runs-dir", help=argparse.SUPPRESS)
     parser.add_argument("--db-path", help=argparse.SUPPRESS)
@@ -242,6 +247,71 @@ def main(argv: list[str] | None = None) -> int:
     if not args.client:
         parser.error("--client is required to dispatch or preview a task (or use --list-clients / --list-templates)")
 
+    seed_input: dict[str, Any] = {}
+    if args.target_keyword:
+        seed_input["target_keyword"] = args.target_keyword
+        if not args.seed_keywords:
+            seed_input["seed_keywords"] = [args.target_keyword]
+    if args.seed_keywords:
+        seed_input["seed_keywords"] = args.seed_keywords
+    if args.intent:
+        seed_input["intent"] = args.intent
+
+    if args.auto_pipeline:
+        import client_reporter
+        try:
+            dispatch_results = dispatch_all_templates(
+                args.client,
+                seed_input=seed_input or None,
+                dry_run=args.dry_run,
+                worker_engine=args.worker_engine,
+                root=args.root,
+                runs_dir=args.runs_dir,
+                db_path=args.db_path,
+            )
+            package_res = client_reporter.compile_and_export_client_package(
+                args.client,
+                root=args.root,
+                db_path=args.db_path,
+                runs_dir=args.runs_dir,
+            )
+            combined = {
+                "success": True,
+                "client_id": args.client,
+                "pipeline": "auto",
+                "dispatch_results": dispatch_results,
+                "campaign_package": package_res,
+            }
+            if args.json:
+                print(json.dumps(combined, indent=2))
+            else:
+                mode_str = "[DRY-RUN]" if args.dry_run else "[ADMITTED & QUEUED]"
+                print(f"\n{'=' * 65}")
+                print(f"       END-TO-END VENTURE PIPELINE COMPLETE ({mode_str})")
+                print(f"{'=' * 65}")
+                print(f"Client: {package_res['display_name']} ({package_res['client_id']})")
+                print(f"Engine: {args.worker_engine}")
+                print(f"\n[1] Dispatched {len(dispatch_results)} Research Tasks:")
+                for r in dispatch_results:
+                    tid_info = f"task_id={r.get('task_id')}" if not args.dry_run else "dry-run"
+                    print(f"  • {r['template']:<28} -> {tid_info}")
+                print(f"\n[2] Client Campaign & Strategy Dossier:")
+                print(f"  * Google Ads Editor CSV:   {package_res['csv_path']}")
+                print(f"  * Campaign Structure JSON: {package_res['json_path']}")
+                print(f"  * Strategy Dossier (MD):   {package_res['dossier_md_path']}")
+                print(f"  * Strategy Dossier (HTML): {package_res['dossier_html_path']}")
+                print(f"  * Ad Groups:              {package_res['campaign_summary']['ad_groups_count']}")
+                print(f"  * Total Keywords:         {package_res['campaign_summary']['total_keywords']}")
+                print(f"  * Total Negatives:        {package_res['campaign_summary']['total_negatives']}")
+                print(f"{'=' * 65}\n")
+            return 0
+        except Exception as exc:
+            if args.json:
+                print(json.dumps({"error": str(exc), "client_id": args.client}, indent=2), file=sys.stderr)
+            else:
+                print(f"\n[ERROR] Auto-pipeline failed: {exc}\n", file=sys.stderr)
+            return 1
+
     if args.compile_campaign:
         import client_reporter
         try:
@@ -273,17 +343,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     if not args.template:
-        parser.error("--template is required (or use --template all)")
-
-    seed_input: dict[str, Any] = {}
-    if args.target_keyword:
-        seed_input["target_keyword"] = args.target_keyword
-        if not args.seed_keywords:
-            seed_input["seed_keywords"] = [args.target_keyword]
-    if args.seed_keywords:
-        seed_input["seed_keywords"] = args.seed_keywords
-    if args.intent:
-        seed_input["intent"] = args.intent
+        parser.error("--template is required (or use --template all / --auto-pipeline / --compile-campaign)")
 
     try:
         if args.template == "all":

@@ -167,6 +167,37 @@ class WebConsoleTests(unittest.TestCase):
             self.assertEqual(code, 200)
             self.assertIn(b"Campaign,Ad Group,Keyword", body)
 
+            # Test POST /api/clients onboarding
+            code, _, body = request(server, "POST", "/api/clients", {
+                "client_id": "metro-legal",
+                "display_name": "Metro Legal Partners",
+                "domain": "personal injury",
+                "offer": "No win no fee accident claims",
+            })
+            self.assertEqual(code, 200)
+            created = json.loads(body)
+            self.assertTrue(created["success"])
+            self.assertEqual(created["client_id"], "metro-legal")
+
+            # Verify listed in GET /api/clients
+            code, _, body = request(server, "GET", "/api/clients")
+            self.assertEqual(code, 200)
+            clients_list = json.loads(body)["clients"]
+            self.assertIn("metro-legal", [c["client_id"] for c in clients_list])
+
+            # Validation failures
+            code, _, body = request(server, "POST", "/api/clients", {
+                "client_id": "../malicious",
+                "display_name": "Bad Client",
+            })
+            self.assertEqual(code, 400)
+
+            code, _, body = request(server, "POST", "/api/clients", {
+                "client_id": "missing-name",
+                "display_name": "",
+            })
+            self.assertEqual(code, 400)
+
         # 2. Paused / ESTOP engaged: verify fail-closed live dispatch rejection
         with fixture(paused=True) as f, serving(f.gw) as server:
             client_profile.save_client_profile(sample_profile, root=f.root)

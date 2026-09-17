@@ -18,6 +18,7 @@ import hmac
 import ipaddress
 import json
 import logging
+import re
 import secrets
 import socket
 import sys
@@ -253,7 +254,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <!-- Ad & Research Engine Dispatch Form -->
           <form id="form-dist" onsubmit="event.preventDefault();" class="space-y-3">
             <div>
-              <label class="block text-xs font-mono text-slate-400 mb-1">CLIENT PROFILE</label>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-mono text-slate-400">CLIENT PROFILE</label>
+                <button type="button" onclick="openNewClientModal()" class="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline">+ New Client</button>
+              </div>
               <select id="dist-client" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
                 <option value="">Select client profile...</option>
               </select>
@@ -460,6 +464,63 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <div class="text-slate-400" id="modal-footer-info">Broker receipts do not independently verify deliverable claims</div>
         <button onclick="closeDeliverableModal()" class="px-4 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-black font-bold">Close Inspector</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CLIENT ONBOARDING -->
+  <div id="new-client-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-cardbg border border-bordercol rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col">
+      <div class="px-6 py-4 border-b border-bordercol flex items-center justify-between">
+        <div>
+          <div class="font-extrabold text-sm tracking-wide text-white">
+            <span class="text-cyan-400">Onboard</span> New Client Profile
+          </div>
+          <div class="text-xs font-mono text-slate-400 mt-0.5">Creates isolated workspace/clients/{client_id}/ profile</div>
+        </div>
+        <button type="button" onclick="closeNewClientModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold">✕</button>
+      </div>
+      <form id="form-new-client" onsubmit="event.preventDefault(); handleCreateClient();" class="p-6 space-y-3 max-h-[70vh] overflow-y-auto">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-mono text-slate-400 mb-1">CLIENT SLUG / ID *</label>
+            <input type="text" id="new-client-id" required placeholder="e.g. apex-roofing" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-xs font-mono text-slate-400 mb-1">DISPLAY NAME *</label>
+            <input type="text" id="new-client-name" required placeholder="e.g. Apex Commercial Roofing" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-mono text-slate-400 mb-1">TARGET DOMAIN / NICHE</label>
+            <input type="text" id="new-client-domain" placeholder="e.g. commercial roofing austin" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-xs font-mono text-slate-400 mb-1">LANDING PAGE URL</label>
+            <input type="url" id="new-client-landing" placeholder="https://apex-roofing.example" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-mono text-slate-400 mb-1">CORE OFFER / SERVICE</label>
+          <input type="text" id="new-client-offer" placeholder="e.g. Commercial roof inspection, TPO membrane installation, and emergency leak repair" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+        </div>
+        <div>
+          <label class="block text-xs font-mono text-slate-400 mb-1">TARGET AUDIENCE</label>
+          <input type="text" id="new-client-audience" placeholder="e.g. Facility directors, commercial property managers, building owners" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+        </div>
+        <div>
+          <label class="block text-xs font-mono text-slate-400 mb-1">BRAND VOICE</label>
+          <input type="text" id="new-client-voice" value="Authoritative, industrial, prompt, transparent warranties" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+        </div>
+        <div>
+          <label class="block text-xs font-mono text-slate-400 mb-1">SEED KEYWORDS (COMMA-SEPARATED)</label>
+          <input type="text" id="new-client-keywords" placeholder="commercial roofer austin, tpo roofing contractors" class="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+        </div>
+        <div class="flex justify-end gap-2 pt-2 border-t border-bordercol">
+          <button type="button" onclick="closeNewClientModal()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-black font-extrabold text-xs uppercase tracking-wider transition">Save Profile</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -852,6 +913,51 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       `;
     }
 
+    function openNewClientModal() {
+      document.getElementById('new-client-modal').classList.remove('hidden');
+      document.getElementById('new-client-modal').classList.add('flex');
+    }
+
+    function closeNewClientModal() {
+      document.getElementById('new-client-modal').classList.add('hidden');
+      document.getElementById('new-client-modal').classList.remove('flex');
+    }
+
+    async function handleCreateClient() {
+      const clientId = (document.getElementById('new-client-id').value || '').trim().toLowerCase();
+      const displayName = (document.getElementById('new-client-name').value || '').trim();
+      if (!clientId || !displayName) {
+        alert('Client Slug and Display Name are required.');
+        return;
+      }
+      const rawKw = document.getElementById('new-client-keywords').value || '';
+      const payload = {
+        client_id: clientId,
+        display_name: displayName,
+        domain: (document.getElementById('new-client-domain').value || '').trim(),
+        offer: (document.getElementById('new-client-offer').value || '').trim(),
+        audience: (document.getElementById('new-client-audience').value || '').trim(),
+        brand_voice: (document.getElementById('new-client-voice').value || '').trim(),
+        landing_url: (document.getElementById('new-client-landing').value || '').trim() || 'https://example.com',
+        seed_keywords: rawKw.split(',').map(s => s.trim()).filter(Boolean),
+      };
+      const res = await fetchAPI('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res && res.success) {
+        alert(`Client '${displayName}' (${clientId}) onboarded successfully!`);
+        closeNewClientModal();
+        loadedClients = null;
+        await loadDistributionConfig();
+        const select = document.getElementById('dist-client');
+        if (select) select.value = clientId;
+      } else {
+        alert('Failed to save client: ' + (res?.error || 'Unknown error'));
+      }
+    }
+
     async function engageEstop() {
       if (!confirm('Engage ESTOP? Resume requires the controlled-window CLI.')) return;
 
@@ -1204,6 +1310,64 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
             return
 
         gw: Gateway = getattr(self.server, "gateway")
+
+        if path == "/api/clients":
+            client_id = str(payload.get("client_id") or "").strip().lower()
+            if not client_id or not re.match(r"^[a-z0-9_-]+$", client_id):
+                self._send_json({"error": "client_id must contain only lowercase letters, numbers, hyphens, and underscores"}, status=400)
+                return
+            display_name = str(payload.get("display_name") or "").strip()
+            if not display_name:
+                self._send_json({"error": "display_name is required"}, status=400)
+                return
+            domain = str(payload.get("domain") or "").strip()
+            offer = str(payload.get("offer") or "").strip()
+            audience = str(payload.get("audience") or "").strip()
+            brand_voice = str(payload.get("brand_voice") or "Authoritative, professional, transparent").strip()
+            landing_url = str(payload.get("landing_url") or "https://example.com").strip()
+            geo = payload.get("geo") or ["US"]
+            if isinstance(geo, str):
+                geo = [g.strip() for g in geo.split(",") if g.strip()]
+            language = payload.get("language") or ["en"]
+            if isinstance(language, str):
+                language = [l.strip() for l in language.split(",") if l.strip()]
+            seed_keywords = payload.get("seed_keywords") or []
+            if isinstance(seed_keywords, str):
+                seed_keywords = [s.strip() for s in seed_keywords.split(",") if s.strip()]
+            forbidden_claims = payload.get("forbidden_claims") or []
+            if isinstance(forbidden_claims, str):
+                forbidden_claims = [f.strip() for f in forbidden_claims.split(",") if f.strip()]
+            competitors = payload.get("competitors") or []
+            if isinstance(competitors, str):
+                competitors = [c.strip() for c in competitors.split(",") if c.strip()]
+
+            profile_data = {
+                "client_id": client_id,
+                "display_name": display_name,
+                "domain": domain,
+                "geo": geo,
+                "language": language,
+                "offer": offer,
+                "audience": audience,
+                "competitors": competitors,
+                "brand_voice": brand_voice,
+                "landing_url": landing_url,
+                "seed_keywords": seed_keywords,
+                "forbidden_claims": forbidden_claims,
+            }
+
+            root_path = _get_root_from_gateway(gw)
+            try:
+                profile_path = client_profile.save_client_profile(profile_data, root=root_path)
+                self._send_json({
+                    "success": True,
+                    "client_id": client_id,
+                    "profile_path": str(profile_path),
+                    "profile": profile_data,
+                })
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=400)
+            return
 
         if path == "/api/dispatch":
             spec = str(payload.get("spec") or "")

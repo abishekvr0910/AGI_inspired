@@ -320,6 +320,46 @@ def distill_research_skill(
     return note_path
 
 
+def load_active_research_skills(root: Path | str | None = None, max_skills: int = 3) -> str:
+    """Load distilled and promoted research skill lessons under H7 sanitization.
+
+    Enables true self-improving memory: tactics distilled from prior successful tasks
+    are injected into the worker's prompt for future missions.
+    """
+    if root is None:
+        root = ROOT
+    root_path = Path(root)
+    skills: list[str] = []
+
+    candidates_dir = root_path / "skills_analyst" / "_candidates"
+    if candidates_dir.is_dir():
+        for p in sorted(candidates_dir.glob("*.md"), reverse=True):
+            try:
+                txt = p.read_text(encoding="utf-8", errors="replace")
+                cleaned = promote._NOTE_URL_RE.sub("[VERIFIED_SOURCE]", txt)
+                fatal = False
+                for pattern, _ in promote._NOTE_FATAL:
+                    if pattern.search(cleaned):
+                        fatal = True
+                        break
+                if not fatal:
+                    for line in cleaned.splitlines():
+                        line_s = line.strip()
+                        if line_s and not line_s.startswith("#") and not line_s.startswith("Date:") and not line_s.startswith("Key grounded"):
+                            skills.append(line_s[:200])
+                            break
+            except Exception:
+                pass
+            if len(skills) >= max_skills:
+                break
+
+    if not skills:
+        return ""
+
+    tactics = "\n".join(f"- {s}" for s in skills)
+    return f"\n\nSelf-Improving Research Tactics (Learned from prior successful tasks):\n{tactics}"
+
+
 def call_provider_with_tools(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]],
@@ -411,6 +451,7 @@ def run_native_research_turn(
     notebook_path: Path | str | None = None,
     max_turns: int = 8,
     custom_caller: Callable[[list[dict[str, Any]], list[dict[str, Any]]], dict[str, Any]] | None = None,
+    root: Path | str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Execute one autonomous research turn natively without external CLI dependencies.
 
@@ -429,11 +470,14 @@ def run_native_research_turn(
     if notebook and notebook.attempts_seen:
         direction_clause = f"\n\nPrior Research Memory:\n{notebook.direction_block()}"
 
+    skills_clause = load_active_research_skills(root)
+
     system_prompt = (
         "You are an autonomous research analyst. You gather verified, grounded facts using "
         "the provided web search, web fetch, and browser tools. Every factual claim, statistic, "
         "or quote MUST cite the exact URL retrieved. Do not invent facts, metrics, or sources."
         + direction_clause
+        + skills_clause
     )
 
     messages: list[dict[str, Any]] = [

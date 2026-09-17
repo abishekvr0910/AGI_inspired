@@ -291,6 +291,47 @@ class DistributionCLITests(unittest.TestCase):
                 self.assertEqual(len(payloads), 1)
                 self.assertEqual(payloads[0]["claims"]["client_id"], "apex-roofing")
 
+    def test_auto_pipeline_execution(self):
+        """--auto-pipeline dispatches all 7 research tasks and compiles campaign package."""
+        with tempfile.TemporaryDirectory() as td:
+            temp_root = Path(td)
+            db_path = temp_root / "ledger.db"
+            runs = temp_root / "runs"
+            runs.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(db_path))
+            conn.execute(
+                "CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, spec TEXT, pass_criteria TEXT, "
+                "status TEXT, worker_engine TEXT, run_id TEXT, created_at TEXT, updated_at TEXT)"
+            )
+            conn.commit()
+            conn.close()
+
+            client_profile.save_client_profile(SAMPLE_PROFILE, root=temp_root)
+
+            out = io.StringIO()
+            with patch("sys.stdout", out):
+                code = distribution.main([
+                    "--client", "apex-roofing",
+                    "--auto-pipeline",
+                    "--dry-run",
+                    "--json",
+                    "--root", str(temp_root),
+                    "--db-path", str(db_path),
+                    "--runs-dir", str(runs),
+                ])
+            self.assertEqual(code, 0)
+            data = json.loads(out.getvalue())
+            self.assertTrue(data["success"])
+            self.assertEqual(data["pipeline"], "auto")
+            self.assertEqual(len(data["dispatch_results"]), 7)
+            self.assertIn("campaign_package", data)
+            pkg = data["campaign_package"]
+            self.assertTrue(pkg["success"])
+            self.assertEqual(pkg["client_id"], "apex-roofing")
+            self.assertTrue(Path(pkg["csv_path"]).is_file())
+            self.assertTrue(Path(pkg["dossier_md_path"]).is_file())
+            self.assertTrue(Path(pkg["dossier_html_path"]).is_file())
+
     def test_zero_spend_containment_three_probes(self):
         """3-probe test passes across all orchestrator files and CLI tests."""
         sdk_forbidden = [
