@@ -31,7 +31,8 @@
     "test_distribution_keyword_research",
     "test_distribution_templates",
     "test_distribution_cli",
-    "test_native_worker"
+    "test_native_worker",
+    "test_distribution_phase2"
   ],
   "containment": [
     "test_worker_sandbox",

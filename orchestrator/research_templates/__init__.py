@@ -7,6 +7,8 @@ from .competitive_serp import generate_competitive_serp_task
 from .ad_copy_variants import generate_ad_copy_variants_task
 from .seo_content_brief import generate_seo_content_brief_task
 from .landing_page_recco import generate_landing_page_recco_task
+from .negative_keyword_harvest import generate_negative_keyword_harvest_task
+from .audience_pain_point_research import generate_audience_pain_point_research_task
 
 __all__ = [
     "generate_keyword_research_task",
@@ -14,4 +16,6 @@ __all__ = [
     "generate_ad_copy_variants_task",
     "generate_seo_content_brief_task",
     "generate_landing_page_recco_task",
+    "generate_negative_keyword_harvest_task",
+    "generate_audience_pain_point_research_task",
 ]

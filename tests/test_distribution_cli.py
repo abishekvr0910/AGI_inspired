@@ -56,7 +56,7 @@ class DistributionCLITests(unittest.TestCase):
         self.addCleanup(self.patcher.stop)
 
     def test_list_templates(self):
-        """--list-templates outputs all 5 registered templates."""
+        """--list-templates outputs all 7 registered templates."""
         out = io.StringIO()
         with patch("sys.stdout", out):
             code = distribution.main(["--list-templates", "--json"])
@@ -70,6 +70,8 @@ class DistributionCLITests(unittest.TestCase):
                 "ad_copy_variants",
                 "seo_content_brief",
                 "landing_page_recco",
+                "negative_keyword_harvest",
+                "audience_pain_point_research",
             },
         )
 
@@ -266,9 +268,9 @@ class DistributionCLITests(unittest.TestCase):
                 root=temp_root,
             )
 
-            self.assertEqual(len(results), 5)
+            self.assertEqual(len(results), 7)
             task_ids = [r["task_id"] for r in results]
-            self.assertEqual(task_ids, [1, 2, 3, 4, 5])
+            self.assertEqual(task_ids, [1, 2, 3, 4, 5, 6, 7])
             templates_dispatched = [r["template"] for r in results]
             self.assertEqual(
                 templates_dispatched,
@@ -278,11 +280,13 @@ class DistributionCLITests(unittest.TestCase):
                     "ad_copy_variants",
                     "seo_content_brief",
                     "landing_page_recco",
+                    "negative_keyword_harvest",
+                    "audience_pain_point_research",
                 ],
             )
 
-            # Verify all 5 have DSSE DISPATCH records with client_id
-            for tid in range(1, 6):
+            # Verify all 7 have DSSE DISPATCH records with client_id
+            for tid in range(1, 8):
                 payloads = chain.read_payloads(runs, tid)
                 self.assertEqual(len(payloads), 1)
                 self.assertEqual(payloads[0]["claims"]["client_id"], "apex-roofing")

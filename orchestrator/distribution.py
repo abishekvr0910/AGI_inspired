@@ -25,6 +25,8 @@ from research_templates import (
     generate_ad_copy_variants_task,
     generate_seo_content_brief_task,
     generate_landing_page_recco_task,
+    generate_negative_keyword_harvest_task,
+    generate_audience_pain_point_research_task,
 )
 
 TEMPLATES = {
@@ -52,6 +54,16 @@ TEMPLATES = {
         "func": generate_landing_page_recco_task,
         "description": "Structural conversion recommendations (Hero, Subhead, Proof, CTA) and rationale.",
         "surface": "Ads + SEO",
+    },
+    "negative_keyword_harvest": {
+        "func": generate_negative_keyword_harvest_task,
+        "description": "Exclusion harvesting (free/cheap/DIY/careers/out-of-scope) with match types and waste rationales.",
+        "surface": "Ads (Primary)",
+    },
+    "audience_pain_point_research": {
+        "func": generate_audience_pain_point_research_task,
+        "description": "Customer complaint, objection, and anxiety mining with emotional triggers and ad hook angles.",
+        "surface": "Ads + Copywriting",
     },
 }
 
