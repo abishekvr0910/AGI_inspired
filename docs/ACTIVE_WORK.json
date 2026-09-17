@@ -4,6 +4,26 @@
   "active_agents": [
     {
       "agent": "gemini-cli",
+      "role": "V2 Productization: Native Self-Improving Research Worker (orchestrator/native_worker.py) & Memory Loop",
+      "task_id": "NATIVE-SELF-IMPROVING-WORKER-2026-09-17",
+      "mode": "completed",
+      "owned_paths": [
+        "orchestrator/native_worker.py",
+        "tests/test_native_worker.py",
+        "tests/tiers.json",
+        "docs/ACTIVE_WORK.json",
+        "docs/CURRENT_STATE.md",
+        ".harness/continuity/current.json"
+      ],
+      "started_at": "2026-09-17T13:30:00Z",
+      "last_update": "2026-09-17T13:45:00Z",
+      "status": "completed",
+      "blocked_by": null,
+      "handoff_path": null,
+      "notes": "COMPLETED and verified: Native Self-Improving Research Worker (orchestrator/native_worker.py) and test suite (tests/test_native_worker.py) landed; pure Python agent loop with function-calling schemas for web_search, web_fetch, and browser_extract; directly wired into research_notebook.py and promote.py; gate expanded to 94/94 suites green (unit 79, containment 8, integration 7); zero-spend containment verified."
+    },
+    {
+      "agent": "gemini-cli",
       "role": "Distribution Engine: Phase 1 (Research Core, Zero-Spend) - CLI Dispatcher & Mechanism Completion",
       "task_id": "DISTRIBUTION-ENGINE-PHASE1-CLI-2026-09-17",
       "mode": "completed",
