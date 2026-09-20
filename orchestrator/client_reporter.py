@@ -128,9 +128,9 @@ def extract_pain_points_from_deliverable(text: str) -> list[dict[str, Any]]:
             if pain:
                 results.append({
                     "pain_point": pain.strip(),
-                    "emotional_trigger": row.get("Emotional Trigger") or row.get("emotional_trigger") or "",
-                    "recommended_hook": row.get("Recommended Ad Hook") or row.get("recommended_hook") or "",
-                    "proof_required": row.get("Proof Required") or row.get("proof_required") or "",
+                    "emotional_trigger": row.get("Emotional Trigger") or row.get("Underlying Anxiety") or row.get("emotional_trigger") or "",
+                    "recommended_hook": row.get("Recommended Ad Hook") or row.get("Recommended Ad Hook / Angle") or row.get("recommended_hook") or "",
+                    "proof_required": row.get("Proof Required") or row.get("Proof Requirement Needed") or row.get("proof_required") or "",
                     "source_url": row.get("Source URL") or row.get("source_url") or "",
                 })
     return results

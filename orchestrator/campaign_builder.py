@@ -140,15 +140,24 @@ def build_campaign_from_research(
         theme = str(item.get("theme") or item.get("intent") or sanitize_theme_name(kw))
         theme_groups.setdefault(theme, []).append(item)
 
-    # 3. Compile Ad Copies for reuse across Ad Groups
+    # 3. Compile Ad Copies for reuse across Ad Groups (targeting Excellent Ad Strength: 10-15 headlines, 4 descriptions)
     default_headlines = [
-        f"{display_name[:30]}",
-        f"Fast & Reliable Service"[:30],
-        f"Get A Free Quote Today"[:30],
+        f"{display_name}"[:MAX_HEADLINE_LENGTH],
+        f"Fast & Reliable Service"[:MAX_HEADLINE_LENGTH],
+        f"Get A Free Quote Today"[:MAX_HEADLINE_LENGTH],
+        f"Experienced Local Team"[:MAX_HEADLINE_LENGTH],
+        f"Transparent Pricing"[:MAX_HEADLINE_LENGTH],
+        f"Certified & Insured Pros"[:MAX_HEADLINE_LENGTH],
+        f"Top-Rated Local Service"[:MAX_HEADLINE_LENGTH],
+        f"Call Our Specialists Today"[:MAX_HEADLINE_LENGTH],
+        f"Same-Day Consultations"[:MAX_HEADLINE_LENGTH],
+        f"Flexible Payment Options"[:MAX_HEADLINE_LENGTH],
     ]
     default_descriptions = [
-        f"Contact {display_name} today for certified and dependable service. Call now!"[:90],
-        f"Transparent pricing with zero hidden fees. Satisfaction guaranteed on every project."[:90],
+        f"Contact {display_name} today for certified and dependable service. Call for free quote!"[:MAX_DESCRIPTION_LENGTH],
+        f"Transparent pricing with zero hidden fees. Satisfaction guaranteed on every project."[:MAX_DESCRIPTION_LENGTH],
+        f"Proven expertise and reliable support from our local specialists. Book consult today!"[:MAX_DESCRIPTION_LENGTH],
+        f"High quality solutions tailored to your needs. Schedule your appointment now."[:MAX_DESCRIPTION_LENGTH],
     ]
 
     custom_rsa = RSAAd(headlines=list(default_headlines), descriptions=list(default_descriptions), final_url=landing_url)
@@ -157,9 +166,22 @@ def build_campaign_from_research(
             h_list = copy_entry.get("headlines") or []
             d_list = copy_entry.get("descriptions") or []
             if h_list:
-                custom_rsa.headlines = [str(h)[:MAX_HEADLINE_LENGTH] for h in h_list[:MAX_RSA_HEADLINES]]
+                cleaned_h = [str(h)[:MAX_HEADLINE_LENGTH] for h in h_list[:MAX_RSA_HEADLINES]]
+                # Supplement with defaults to ensure >= 8 headlines for Excellent Ad Strength
+                for dh in default_headlines:
+                    if len(cleaned_h) >= 12:
+                        break
+                    if dh not in cleaned_h:
+                        cleaned_h.append(dh)
+                custom_rsa.headlines = cleaned_h
             if d_list:
-                custom_rsa.descriptions = [str(d)[:MAX_DESCRIPTION_LENGTH] for d in d_list[:MAX_RSA_DESCRIPTIONS]]
+                cleaned_d = [str(d)[:MAX_DESCRIPTION_LENGTH] for d in d_list[:MAX_RSA_DESCRIPTIONS]]
+                for dd in default_descriptions:
+                    if len(cleaned_d) >= 4:
+                        break
+                    if dd not in cleaned_d:
+                        cleaned_d.append(dd)
+                custom_rsa.descriptions = cleaned_d
             url = copy_entry.get("landing_url") or copy_entry.get("final_url")
             if url and str(url).startswith("http"):
                 custom_rsa.final_url = str(url)
@@ -246,8 +268,22 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
         "Headline 1",
         "Headline 2",
         "Headline 3",
+        "Headline 4",
+        "Headline 5",
+        "Headline 6",
+        "Headline 7",
+        "Headline 8",
+        "Headline 9",
+        "Headline 10",
+        "Headline 11",
+        "Headline 12",
+        "Headline 13",
+        "Headline 14",
+        "Headline 15",
         "Description 1",
         "Description 2",
+        "Description 3",
+        "Description 4",
         "Final URL",
         "Status",
     ]
@@ -263,9 +299,7 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
                 "",  # Campaign negative has empty Ad Group
                 neg.text,
                 f"Negative {neg.match_type}",
-                "", "", "", "", "", "",
-                "Enabled",
-            ])
+            ] + [""] * 19 + ["", "Enabled"])
 
         # 2. Ad Groups, Keywords, and RSA Ads
         for ag in campaign.ad_groups:
@@ -276,9 +310,7 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
                     ag.name,
                     kw.text,
                     kw.match_type,
-                    "", "", "", "", "", "",
-                    "Enabled",
-                ])
+                ] + [""] * 19 + ["", "Enabled"])
 
             # Ad Group level negatives
             for neg in ag.negatives:
@@ -287,29 +319,17 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
                     ag.name,
                     neg.text,
                     f"Negative {neg.match_type}",
-                    "", "", "", "", "", "",
-                    "Enabled",
-                ])
+                ] + [""] * 19 + ["", "Enabled"])
 
             # RSA Ads
             for ad in ag.ads:
-                h1 = ad.headlines[0] if len(ad.headlines) > 0 else ""
-                h2 = ad.headlines[1] if len(ad.headlines) > 1 else ""
-                h3 = ad.headlines[2] if len(ad.headlines) > 2 else ""
-                d1 = ad.descriptions[0] if len(ad.descriptions) > 0 else ""
-                d2 = ad.descriptions[1] if len(ad.descriptions) > 1 else ""
+                hl = [(ad.headlines[i] if i < len(ad.headlines) else "") for i in range(15)]
+                dl = [(ad.descriptions[i] if i < len(ad.descriptions) else "") for i in range(4)]
                 writer.writerow([
                     campaign.name,
                     ag.name,
                     "",  # Ad row has empty keyword
                     "",
-                    h1,
-                    h2,
-                    h3,
-                    d1,
-                    d2,
-                    ad.final_url,
-                    "Enabled",
-                ])
+                ] + hl + dl + [ad.final_url, "Enabled"])
 
     return p
