@@ -5,12 +5,49 @@
 > are implemented. Deployment evidence remains required; no live execution is
 > authorized.
 
-**Last Updated:** 2026-09-20 (Commercial Outreach Engine Active: ClearChoice Enterprise Sample, 3 Pilot Packages, Outreach Playbook & Tracker, Table Parser Hardening; 96/96 suites green; ESTOP strictly engaged)
-**Phase:** Venture Commercial Outreach & Deliverable Production Active; Enterprise Audit Sample Landed (`workspace/clients/clearchoice-dental/`), 3 High-Ticket Pilots Compiled (`apex-roofing`, `metro-dental`, `titan-hvac`), Commercial Outreach Playbook (`workspace/PILOT_OUTREACH_PLAYBOOK.md`), 150-Lead Tracker (`workspace/PROSPECT_TRACKER.csv`), and Table Parser Synonym Hardening (`orchestrator/client_reporter.py`); 96/96 test suites green; ESTOP strictly engaged throughout
+**Last Updated:** 2026-09-22 (Codex Claims Resolved: Commercial Evidence Gate, Campaign Builder Forbidden Claims, Native Skills Gate, Native CDP Browser, Tier Manifest Registration, Regression Tests; 97/97 suites green; ESTOP strictly engaged)
+**Phase:** Codex Claims Resolved — Supervised Research Prototype with Commercial Draft Tooling; Verified Client `el-shaddai-coffee-katowice` Added; 97/97 test suites green (unit 82, containment 8, integration 7); ESTOP strictly engaged throughout
 **Safety Status:** ESTOP engaged (`True`) | 0 zombies | Zero live execution active | Egress WFP deny-direct-egress rule active | AGI_AuditSigner service running as `.\AGI_Signer` | System attestation re-signed and Ed25519-verified against the trusted operator key (`policy_sha256` unchanged at `17f08fd6…`, `broker_program_sha256` `8ca61b8c` == current broker) | On branch `product/v1-completion-2026-09-15` (local commits, NOT merged to `main`, zero push per Rule 28) | Critic unchanged (`ollama/glm-5.2:cloud`) | No egress allowlist widening across commits (zero-diff) | `MAX_REPAIR_ATTEMPTS=2` unchanged
-**Verification:** Full model-free gate: 96/96 suites green (tiers: unit 81, containment 8, integration 7), exit 0, zero `[FAIL]`/`FAILED`/`ERROR` lines (D6). System attestation Ed25519-verified (`verify_marker` OK; broker + policy digests match current code). ESTOP strictly engaged. 0 zombies.
+**Verification:** Full model-free gate: 97/97 suites green (tiers: unit 82, containment 8, integration 7), exit 0, zero `[FAIL]`/`FAILED`/`ERROR` lines. System attestation Ed25519-verified (`verify_marker` OK; broker + policy digests match current code). ESTOP strictly engaged. 0 zombies.
 
 Current handoff: `docs/reviews/GEMINI_COMMERCIAL_OUTREACH_AND_ENTERPRISE_SAMPLE_2026-09-20.md`, `docs/reviews/GEMINI_DISTRIBUTION_ENGINE_PHASE3_AND_VENTURE_DELIVERY_2026-09-17.md`, `docs/reviews/GEMINI_DISTRIBUTION_ENGINE_PHASE2_AND_WEB_UI_REPORT_2026-09-17.md`, `docs/reviews/GEMINI_DISTRIBUTION_ENGINE_PHASE1_1B_REPORT_2026-09-17.md`, `docs/reviews/CLAUDE_VERIFICATION_DISTRIBUTION_ENGINE_PHASE1_2026-09-16.md`, `docs/reviews/GEMINI_DISTRIBUTION_ENGINE_PHASE1_1A_REPORT_2026-09-16.md`, `docs/reviews/CLAUDE_VERIFICATION_V1_HARDENING_2026-09-16.md`, `docs/reviews/GEMINI_V1_HARDENING_REPORT_2026-09-15.md`, `docs/reviews/GEMINI_V1_PRODUCTIZATION_AND_INTERFACE_REPORT_2026-09-14.md`, `docs/reviews/CLAUDE_VERIFICATION_PHASE0_YIELD_GATE_2026-09-14.md`, `docs/reviews/GEMINI_PHASE0_YIELD_GATE_REPORT_2026-09-14.md`, `docs/reviews/GEMINI_STRATEGIC_HANDOFF_CLAUDE_V1_PRODUCT_2026-09-14.md`, `docs/reviews/GEMINI_SPEC_COMPLIANCE_PROMPT_FLOOR_REPORT_2026-09-13.md`, `docs/reviews/CLAUDE_VERIFICATION_LOOP_DEPTH_PROBE_2026-09-13.md`, `docs/GEMINI_TASK_SPEC_COMPLIANCE_PROMPT_FLOOR_2026-09-13.md`, `docs/reviews/GEMINI_LOOP_DEPTH_RESEARCH_DIRECTIVE_REPORT_2026-09-13.md`, `docs/reviews/CLAUDE_VERIFICATION_FRONTIER_WORKER_ABLATION_2026-09-13.md`, `docs/reviews/GEMINI_FRONTIER_WORKER_ABLATION_REPORT_2026-09-13.md`, `docs/reviews/GEMINI_M6_REROLL_PROBE_AND_VARIANCE_PROOF_2026-09-13.md`, `docs/reviews/CLAUDE_VERIFICATION_FINISH_HARNESS_YIELD_TUNING_2026-09-13.md`, `docs/reviews/GEMINI_COHORT_CORRECTED_YIELD_AND_TUNING_2026-09-13.md`, `docs/reviews/GEMINI_VENTURE_FULL_COHORT_REPORT_2026-09-12.md`, `docs/reviews/GEMINI_VENTURE_TASK185_DISPATCH_AND_INFRA_VERIFICATION_2026-09-12.md`, `docs/reviews/GEMINI_FULL_COHORT_M1_M7_REPORT_2026-09-12.md`, `docs/reviews/GEMINI_M2_LIVE_VERIFICATION_EMPIRICAL_PASS_2026-09-12.md`, `docs/reviews/GEMINI_M2_BROWSER_AND_DEFICIT_B_S3_HANDOFF_2026-09-12.md`, `docs/reviews/GEMINI_SUPERVISED_COHORT_OPENAI_LIVE_HANDOFF_2026-09-11.md`, `docs/reviews/GEMINI_SUPERVISED_COHORT_AND_EMPIRICAL_PROOFS_2026-09-11.md`, `docs/GEMINI_HONEST_SCORECARD_AND_ENTERPRISE_HANDOFF_2026-09-10.md`, `docs/RUNBOOK_PATH_A_THREE_IDENTITY.md`.
+Recent Landings (2026-09-22) — Codex Claims Resolution (`orchestrator/evidence_gate.py`, `orchestrator/campaign_builder.py`, `orchestrator/native_worker.py`, `orchestrator/client_reporter.py`, `orchestrator/execution.py`, `orchestrator/task_runner.py`, `orchestrator/web_ui.py`, `orchestrator/distribution.py`, tests/):
+
+1. **Commercial Evidence Gate** (`orchestrator/evidence_gate.py`):
+   - Separate sample/unverified/verified records with source/date/reviewer approval required
+   - Blocks client-ready export unless prospect is VERIFIED with operator approval
+   - All 8 existing synthetic prospects relabeled as SAMPLE (555 numbers, fabricated waste estimates)
+   - New verified client `el-shaddai-coffee-katowice` added with real evidence
+
+2. **Campaign Builder Forbidden Claims Fix** (`orchestrator/campaign_builder.py`):
+   - Default forbidden claims list (certified, insured, guaranteed, satisfaction guaranteed, etc.)
+   - Filters both default and custom ad copies against client `forbidden_claims` + defaults
+   - Expanded default headlines to 15 (Excellent Ad Strength target) after filtering
+   - CSV export adds `SAMPLE_` prefix for unverified campaigns
+
+3. **Native Skills Gate Fix** (`orchestrator/native_worker.py`):
+   - `load_active_research_skills()` now loads ONLY from operator-approved `skills_analyst/<mission>/`
+   - Unapproved candidates in `_candidates/` are ignored
+   - Added `mission_id` filter for targeted skill loading
+   - Threaded through `execution.py` → `task_runner.py` → `worker_with_failover()`
+
+4. **Native CDP Browser Extraction** (`orchestrator/native_worker.py`):
+   - Genuine WebSocket + CDP implementation (Page.navigate, DOM.getDocument, DOM.querySelector, DOM.getOuterHTML)
+   - BeautifulSoup text extraction from rendered DOM
+   - Falls back to HTTP fetch only on CDP failure or missing dependencies
+   - Checks `websockets` + `beautifulsoup4` availability at runtime
+
+5. **Regression Tests Added**:
+   - `tests/test_campaign_builder_regression.py`: 12 tests (forbidden claims, headline count, evidence gate)
+   - `tests/test_native_worker.py`: 4 new tests (CDP success, dependency missing, HTTP fallback, approved-skills-only)
+   - Updated `tests/test_client_reporter.py`, `tests/test_distribution_cli.py`, `tests/test_distribution_phase2.py`, `tests/test_web_ui.py` for evidence gate
+   - **97/97 suites green (unit 82, containment 8, integration 7)** across all modified components
+
+6. **Verified Client Added** (`el-shaddai-coffee-katowice`):
+   - Real client profile with actual website, seed keywords, Polish language
+   - Evidence gate verification with 7 required evidence records
+   - Generated dossier HTML + Google Ads Editor CSV (4 STAGs, 15 headlines, 4 descriptions, Polish language)
+
 Recent Landings (2026-09-20) — Commercial Outreach Engine & Enterprise Pilot Delivery (`scripts/compile_clearchoice_sample.py`, `scripts/setup_three_pilots.py`, `orchestrator/client_reporter.py`, `workspace/`):
 1. Enterprise Audit Deliverables (ClearChoice Dental Implant Centers, `workspace/clients/clearchoice-dental/`):
    - Compiled production-grade Google Ads Editor import CSV (`google_ads_editor_import.csv`) with 4 Single-Theme Ad Groups (STAGs), 12 Exact/Phrase keywords, 8 negative shields, and 4 Responsive Search Ads strictly respecting character limits (Headlines <= 30 chars, Descriptions <= 90 chars).

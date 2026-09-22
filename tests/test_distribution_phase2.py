@@ -194,23 +194,29 @@ class DistributionPhase2Tests(unittest.TestCase):
                 reader = csv.reader(f)
                 rows = list(reader)
 
-            headers = rows[0]
+            # Skip sample warning row if present
+            header_idx = 0
+            if rows and rows[0] and rows[0][0].startswith("# SAMPLE"):
+                header_idx = 1
+            
+            headers = rows[header_idx]
             self.assertEqual(headers[0], "Campaign")
             self.assertEqual(headers[1], "Ad Group")
             self.assertEqual(headers[2], "Keyword")
             self.assertEqual(headers[3], "Criterion Type")
 
-            # Check campaign negative row
-            neg_row = next(r for r in rows[1:] if "cheap" in r[2])
+            # Check campaign negative row (skip header and sample row)
+            data_rows = rows[header_idx + 1:]
+            neg_row = next(r for r in data_rows if "cheap" in r[2])
             self.assertEqual(neg_row[1], "")  # Empty ad group for campaign-level negative
             self.assertEqual(neg_row[3], "Negative Phrase")
 
             # Check keyword rows
-            kw_exact_row = next(r for r in rows[1:] if r[2] == "commercial roof coatings" and r[3] == "Exact")
+            kw_exact_row = next(r for r in data_rows if r[2] == "commercial roof coatings" and r[3] == "Exact")
             self.assertEqual(kw_exact_row[1], "Roof Coatings")
 
             # Check RSA ad row
-            ad_row = next(r for r in rows[1:] if r[1] == "Roof Coatings" and r[2] == "")
+            ad_row = next(r for r in data_rows if r[1] == "Roof Coatings" and r[2] == "")
             self.assertIn("Apex Commercial Roofing", ad_row[4])  # Headline 1
 
     def test_distribution_cli_all_seven_templates(self):

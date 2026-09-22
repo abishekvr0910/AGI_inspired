@@ -165,7 +165,8 @@ class TestClientReporter(unittest.TestCase):
         (cdir / "ad_copy_variants.md").write_text(SAMPLE_AD_COPY_DOC, encoding="utf-8")
         (cdir / "audience_pain_point_research.md").write_text(SAMPLE_PAIN_POINT_DOC, encoding="utf-8")
 
-        res = client_reporter.compile_and_export_client_package("test-dental", root=self.tmp_dir)
+        # Use force_export=True for sample generation (evidence gate blocks unverified prospects)
+        res = client_reporter.compile_and_export_client_package("test-dental", root=self.tmp_dir, force_export=True)
         self.assertTrue(res["success"])
         self.assertEqual(res["client_id"], "test-dental")
         self.assertEqual(res["display_name"], "Metro Dental Implants")

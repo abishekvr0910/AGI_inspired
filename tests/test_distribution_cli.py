@@ -308,6 +308,27 @@ class DistributionCLITests(unittest.TestCase):
 
             client_profile.save_client_profile(SAMPLE_PROFILE, root=temp_root)
 
+            # Create verified evidence record for test client (bypass evidence gate)
+            import evidence_gate
+            gate = evidence_gate.EvidenceGate(root=temp_root)
+            from evidence_gate import ProspectVerification, VerificationStatus, EvidenceRecord, ClaimType
+            from datetime import datetime
+            now = datetime.utcnow().isoformat() + "Z"
+            v = ProspectVerification(
+                client_id="apex-roofing",
+                company_name="Apex Commercial Roofing",
+                status=VerificationStatus.VERIFIED,
+                approved_for_export=True,
+            )
+            v.add_evidence(EvidenceRecord(ClaimType.CONTACT, "contact_name", "operator", now, "test", now, verified=True))
+            v.add_evidence(EvidenceRecord(ClaimType.CONTACT, "contact_email", "operator", now, "test", now, verified=True))
+            v.add_evidence(EvidenceRecord(ClaimType.CONTACT, "contact_role", "operator", now, "test", now, verified=True))
+            v.add_evidence(EvidenceRecord(ClaimType.COMPANY, "company_name", "operator", now, "test", now, verified=True))
+            v.add_evidence(EvidenceRecord(ClaimType.COMPANY, "website", "operator", now, "test", now, verified=True))
+            v.add_evidence(EvidenceRecord(ClaimType.COMPANY, "city", "operator", now, "test", now, verified=True))
+            v.add_evidence(EvidenceRecord(ClaimType.WASTE_ESTIMATE, "est_monthly_leak", "operator", now, "test", now, verified=True))
+            gate.create_or_update(v)
+
             out = io.StringIO()
             with patch("sys.stdout", out):
                 code = distribution.main([

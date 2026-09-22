@@ -214,18 +214,18 @@ class NativeWorkerTests(unittest.TestCase):
             self.assertIsNone(blocked_path)
 
     def test_load_active_research_skills(self):
-        """load_active_research_skills loads H7-safe lessons and formats tactics clause."""
+        """load_active_research_skills loads H7-safe lessons from approved mission dirs."""
         with tempfile.TemporaryDirectory() as td:
             temp_root = Path(td)
-            cand_dir = temp_root / "skills_analyst" / "_candidates"
-            cand_dir.mkdir(parents=True, exist_ok=True)
-
+            # Create approved skill in mission directory (new structure)
+            mission_dir = temp_root / "skills_analyst" / "m2_pricing"
+            mission_dir.mkdir(parents=True, exist_ok=True)
             valid_skill = "# Research Lesson: m2_pricing (Task 101)\nDate: 2026-09-17\nKey grounded observation:\nFor pricing pages, look for annual discount toggle and table comparison cells.\n"
-            (cand_dir / "task101_m2_pricing_skill.md").write_text(valid_skill, encoding="utf-8")
+            (mission_dir / "task101_approved_skill.md").write_text(valid_skill, encoding="utf-8")
 
-            clause = native_worker.load_active_research_skills(root=temp_root)
+            clause = native_worker.load_active_research_skills(root=temp_root, mission_id="m2_pricing")
             self.assertIn("Self-Improving Research Tactics", clause)
-            self.assertIn("For pricing pages, look for annual discount toggle", clause)
+            self.assertIn("annual discount toggle", clause)
 
     def test_estop_enforcement(self):
         """run_native_research_turn refuses execution when ESTOP is engaged."""
@@ -387,6 +387,134 @@ class NativeWorkerTests(unittest.TestCase):
         ad_host_keywords = ["googleads", "ads.google", "bingads", "ads.yahoo", "ads.tiktok", "adservice"]
         for kw in ad_host_keywords:
             self.assertNotIn(kw, egress_yaml, f"Probe 3 violation: {kw} in egress policy")
+
+    def test_load_active_research_skills_from_approved_only(self):
+        """load_active_research_skills loads ONLY from operator-approved skills_analyst/<mission>/, NOT _candidates/."""
+        with tempfile.TemporaryDirectory() as td:
+            temp_root = Path(td)
+            
+            # Create UNapproved candidate in _candidates (should be IGNORED)
+            cand_dir = temp_root / "skills_analyst" / "_candidates"
+            cand_dir.mkdir(parents=True, exist_ok=True)
+            unapproved_skill = "# Research Lesson: m2_pricing (Task 101)\nDate: 2026-09-17\nKey grounded observation:\nUNVERIFIED CLAIM: Always use fake data for testing.\n"
+            (cand_dir / "task101_m2_pricing_skill.md").write_text(unapproved_skill, encoding="utf-8")
+            
+            # Create APPROVED skill in mission directory (should be LOADED)
+            mission_dir = temp_root / "skills_analyst" / "m2_pricing"
+            mission_dir.mkdir(parents=True, exist_ok=True)
+            approved_skill = "# Research Lesson: m2_pricing (Task 101)\nDate: 2026-09-17\nKey grounded observation:\nFor pricing pages, look for annual discount toggle and table comparison cells.\n"
+            (mission_dir / "task101_approved_skill.md").write_text(approved_skill, encoding="utf-8")
+            
+            clause = native_worker.load_active_research_skills(root=temp_root, mission_id="m2_pricing")
+            
+            # Should load approved skill
+            self.assertIn("Self-Improving Research Tactics", clause)
+            self.assertIn("annual discount toggle", clause)
+            # Should NOT load unapproved candidate
+            self.assertNotIn("UNVERIFIED CLAIM", clause)
+            self.assertNotIn("fake data", clause)
+
+    def test_load_active_research_skills_mission_filter(self):
+        """load_active_research_skills respects mission_id filter."""
+        with tempfile.TemporaryDirectory() as td:
+            temp_root = Path(td)
+            
+            # Create approved skills for two different missions
+            m1_dir = temp_root / "skills_analyst" / "m1_test"
+            m1_dir.mkdir(parents=True, exist_ok=True)
+            (m1_dir / "skill1.md").write_text("# Research Lesson: m1_test\nDate: 2026-09-17\nKey grounded observation:\nM1 specific technique.\n", encoding="utf-8")
+            
+            m2_dir = temp_root / "skills_analyst" / "m2_test"
+            m2_dir.mkdir(parents=True, exist_ok=True)
+            (m2_dir / "skill2.md").write_text("# Research Lesson: m2_test\nDate: 2026-09-17\nKey grounded observation:\nM2 specific technique.\n", encoding="utf-8")
+            
+            # Request only m1 skills
+            clause = native_worker.load_active_research_skills(root=temp_root, mission_id="m1_test")
+            self.assertIn("M1 specific technique", clause)
+            self.assertNotIn("M2 specific technique", clause)
+            
+            # Request only m2 skills
+            clause = native_worker.load_active_research_skills(root=temp_root, mission_id="m2_test")
+            self.assertIn("M2 specific technique", clause)
+            self.assertNotIn("M1 specific technique", clause)
+            
+            # Request none -> loads from all
+            clause = native_worker.load_active_research_skills(root=temp_root)
+            self.assertIn("M1 specific technique", clause)
+            self.assertIn("M2 specific technique", clause)
+
+    def test_browser_extract_uses_cdp_when_ready(self):
+        """execute_browser_extract uses CDP when daemon is ready."""
+        with patch("browser_daemon.is_cdp_ready", return_value=True):
+            with patch("urllib.request.urlopen") as mock_urlopen:
+                mock_resp = MagicMock()
+                mock_resp.read.return_value = json.dumps({"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/123"}).encode()
+                mock_resp.__enter__.return_value = mock_resp
+                mock_urlopen.return_value = mock_resp
+                
+                # Mock the websocket connection and CDP flow
+                mock_ws = MagicMock()
+                mock_ws.__aenter__.return_value = mock_ws
+                mock_ws.__aexit__.return_value = None
+                
+                # Mock websocket responses for CDP flow
+                responses = [
+                    json.dumps({"id": 1, "result": {}}),  # Runtime.enable ack
+                    json.dumps({"id": 2, "result": {}}),  # Page.enable ack
+                    json.dumps({"method": "Page.loadEventFired"}),  # Navigation complete
+                    json.dumps({"id": 4, "result": {"root": {"nodeId": 1}}}),  # DOM.getDocument
+                    json.dumps({"id": 5, "result": {"nodeId": 2}}),  # DOM.querySelector
+                    json.dumps({"id": 6, "result": {"outerHTML": "<html><body><h1>Test</h1></body></html>"}}),  # DOM.getOuterHTML
+                    json.dumps({"id": 7, "result": {"result": {"result": {"value": "Test Title"}}}}),  # Runtime.evaluate
+                ]
+                mock_ws.recv.side_effect = responses
+                
+                with patch("websockets.connect", return_value=mock_ws):
+                    with patch("asyncio.run") as mock_run:
+                        mock_run.return_value = {
+                            "url": "https://example.com",
+                            "title": "Test Title",
+                            "content": "Test content from CDP",
+                            "status": 200,
+                            "bytes_read": 100,
+                            "error": "",
+                        }
+                        res = native_worker.execute_browser_extract("https://example.com", "h1")
+                        
+                        # Verify CDP was attempted (asyncio.run called)
+                        mock_run.assert_called_once()
+                        # Verify result is from CDP
+                        self.assertEqual(res["title"], "Test Title")
+
+    def test_browser_extract_fails_when_dependencies_missing(self):
+        """execute_browser_extract returns error when websockets or bs4 not available."""
+        with patch("native_worker.WEBSOCKETS_AVAILABLE", False):
+            with patch("browser_daemon.is_cdp_ready", return_value=True):
+                res = native_worker.execute_browser_extract("https://example.com")
+                self.assertEqual(res["status"], 0)
+                self.assertIn("websockets library not installed", res["error"])
+        
+        with patch("native_worker.BS4_AVAILABLE", False):
+            with patch("browser_daemon.is_cdp_ready", return_value=True):
+                res = native_worker.execute_browser_extract("https://example.com")
+                self.assertEqual(res["status"], 0)
+                self.assertIn("beautifulsoup4 library not installed", res["error"])
+
+    def test_browser_extract_cdp_error_fallbacks_to_http(self):
+        """execute_browser_extract falls back to HTTP fetch when CDP fails."""
+        with patch("browser_daemon.is_cdp_ready", return_value=True):
+            with patch("urllib.request.urlopen") as mock_urlopen:
+                mock_resp = MagicMock()
+                mock_resp.read.return_value = json.dumps({"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/123"}).encode()
+                mock_resp.__enter__.return_value = mock_resp
+                mock_urlopen.return_value = mock_resp
+                
+                with patch("websockets.connect", side_effect=Exception("WebSocket connection failed")):
+                    with patch("native_worker.execute_web_fetch", return_value={"url": "https://example.com", "title": "HTTP Title", "content": "HTTP content", "status": 200, "bytes_read": 50, "error": ""}) as mock_fetch:
+                        res = native_worker.execute_browser_extract("https://example.com")
+                        # Should fall back to HTTP fetch
+                        mock_fetch.assert_called_once_with("https://example.com")
+                        self.assertEqual(res["title"], "HTTP Title")
 
 
 if __name__ == "__main__":

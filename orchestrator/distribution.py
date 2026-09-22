@@ -274,6 +274,7 @@ def main(argv: list[str] | None = None) -> int:
                 root=args.root,
                 db_path=args.db_path,
                 runs_dir=args.runs_dir,
+                force_export=True,  # Auto-pipeline generates sample packages for review
             )
             combined = {
                 "success": True,

@@ -356,7 +356,7 @@ profiles_seen = []
 try:
     execution._failover_candidates = lambda cfg, allow_local=True: [cfg]
 
-    def profile_worker(prompt, cfg, path, timeout=None, retrieval_profile=None):
+    def profile_worker(prompt, cfg, path, timeout=None, retrieval_profile=None, mission_id=None):
         profiles_seen.append(retrieval_profile)
         return "usable controlled output", {"total_tokens": 1}
 

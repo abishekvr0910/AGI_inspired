@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
+import asyncio
 import json
 import logging
 import os
@@ -31,6 +32,19 @@ from execution_pause import pause_engaged
 import browser_daemon
 from research_notebook import Notebook, safe_url
 import promote
+
+# Optional dependencies for CDP browser extraction
+try:
+    import websockets
+    WEBSOCKETS_AVAILABLE = True
+except ImportError:
+    WEBSOCKETS_AVAILABLE = False
+
+try:
+    from bs4 import BeautifulSoup
+    BS4_AVAILABLE = True
+except ImportError:
+    BS4_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -205,22 +219,147 @@ def execute_web_fetch(url: str, char_limit: int = DEFAULT_CHAR_LIMIT, proxy: str
 
 
 def execute_browser_extract(url: str, selector: str = "body") -> dict[str, Any]:
-    """Extract rendered content via headless Chrome CDP daemon, falling back to web_fetch."""
+    """Extract rendered content via headless Chrome CDP daemon.
+    
+    Uses CDP (Chrome DevTools Protocol) over WebSocket to navigate and extract
+    rendered DOM content. Falls back to HTTP fetch if CDP is unavailable or fails.
+    """
+    # Check optional dependencies first
+    if not WEBSOCKETS_AVAILABLE:
+        return {
+            "url": url,
+            "title": "",
+            "content": "",
+            "status": 0,
+            "bytes_read": 0,
+            "error": "websockets library not installed - browser extraction unavailable",
+        }
+    if not BS4_AVAILABLE:
+        return {
+            "url": url,
+            "title": "",
+            "content": "",
+            "status": 0,
+            "bytes_read": 0,
+            "error": "beautifulsoup4 library not installed - browser extraction unavailable",
+        }
+
+    # Check if CDP daemon is ready
     if not browser_daemon.is_cdp_ready():
+        # Fall back to HTTP fetch when CDP is not available
         return execute_web_fetch(url)
 
-    # When CDP daemon is ready, route extraction
+    # Get the WebSocket debugger URL
     import urllib.request
     try:
         ver_url = "http://127.0.0.1:9222/json/version"
         with urllib.request.urlopen(ver_url, timeout=2.0) as resp:
             ver_data = json.loads(resp.read().decode("utf-8"))
-            if "webSocketDebuggerUrl" in ver_data:
-                # Browser is active on loopback
+            ws_url = ver_data.get("webSocketDebuggerUrl")
+            if not ws_url:
                 return execute_web_fetch(url)
-    except Exception:
-        pass
-    return execute_web_fetch(url)
+    except Exception as e:
+        return execute_web_fetch(url)
+
+    # Connect via WebSocket and execute CDP commands
+    async def _cdp_extract() -> dict[str, Any]:
+        async with websockets.connect(ws_url) as ws:
+            # Enable Runtime domain
+            await ws.send(json.dumps({"id": 1, "method": "Runtime.enable"}))
+            await ws.recv()  # ack
+            
+            # Enable Page domain
+            await ws.send(json.dumps({"id": 2, "method": "Page.enable"}))
+            await ws.recv()  # ack
+            
+            # Navigate to URL
+            await ws.send(json.dumps({
+                "id": 3,
+                "method": "Page.navigate",
+                "params": {"url": url}
+            }))
+            
+            # Wait for navigation to complete
+            while True:
+                msg = await ws.recv()
+                data = json.loads(msg)
+                if data.get("method") == "Page.loadEventFired":
+                    break
+                if data.get("id") == 3 and "error" in data:
+                    raise RuntimeError(f"Navigation failed: {data['error']}")
+            
+            # Get document node
+            await ws.send(json.dumps({
+                "id": 4,
+                "method": "DOM.getDocument",
+                "params": {"depth": -1, "pierce": True}
+            }))
+            msg = await ws.recv()
+            data = json.loads(msg)
+            if "error" in data:
+                raise RuntimeError(f"DOM.getDocument failed: {data['error']}")
+            root_node_id = data["result"]["root"]["nodeId"]
+            
+            # Query selector
+            await ws.send(json.dumps({
+                "id": 5,
+                "method": "DOM.querySelector",
+                "params": {"nodeId": root_node_id, "selector": selector}
+            }))
+            msg = await ws.recv()
+            data = json.loads(msg)
+            if "error" in data or data.get("result", {}).get("nodeId") is None:
+                # Selector not found, fall back to body
+                selector = "body"
+                await ws.send(json.dumps({
+                    "id": 5,
+                    "method": "DOM.querySelector",
+                    "params": {"nodeId": root_node_id, "selector": selector}
+                }))
+                msg = await ws.recv()
+                data = json.loads(msg)
+            
+            node_id = data.get("result", {}).get("nodeId")
+            if node_id is None:
+                raise RuntimeError(f"Selector '{selector}' not found")
+            
+            # Get outer HTML of selected node
+            await ws.send(json.dumps({
+                "id": 6,
+                "method": "DOM.getOuterHTML",
+                "params": {"nodeId": node_id}
+            }))
+            msg = await ws.recv()
+            data = json.loads(msg)
+            if "error" in data:
+                raise RuntimeError(f"DOM.getOuterHTML failed: {data['error']}")
+            outer_html = data["result"]["outerHTML"]
+            
+            # Also get page title
+            await ws.send(json.dumps({"id": 7, "method": "Runtime.evaluate", "params": {"expression": "document.title"}}))
+            msg = await ws.recv()
+            data = json.loads(msg)
+            title = data.get("result", {}).get("result", {}).get("value", "")
+            
+            # Extract text content from HTML (simple extraction)
+            soup = BeautifulSoup(outer_html, "html.parser")
+            text = soup.get_text(separator="\n", strip=True)
+            
+            return {
+                "url": url,
+                "title": title,
+                "content": text,
+                "status": 200,
+                "bytes_read": len(text),
+                "error": "",
+            }
+
+    # Run async function
+    try:
+        return asyncio.run(_cdp_extract())
+    except Exception as e:
+        # Fall back to HTTP fetch on any CDP error
+        return execute_web_fetch(url)
 
 
 NATIVE_TOOLS = [
@@ -320,22 +459,45 @@ def distill_research_skill(
     return note_path
 
 
-def load_active_research_skills(root: Path | str | None = None, max_skills: int = 3) -> str:
-    """Load distilled and promoted research skill lessons under H7 sanitization.
-
-    Enables true self-improving memory: tactics distilled from prior successful tasks
-    are injected into the worker's prompt for future missions.
+def load_active_research_skills(
+    root: Path | str | None = None,
+    max_skills: int = 3,
+    mission_id: str | None = None,
+) -> str:
+    """Load ONLY operator-approved research skills from skills_analyst/<mission>/.
+    
+    This is the HUMAN-GATED promotion path — only skills that have been
+    operator-approved via `promote.py approve` are loaded. Unapproved candidates
+    in _candidates/ are NEVER loaded here.
+    
+    Args:
+        mission_id: If provided, only load skills for that specific mission.
+                   If None, load from all mission directories.
     """
     if root is None:
         root = ROOT
     root_path = Path(root)
     skills: list[str] = []
 
-    candidates_dir = root_path / "skills_analyst" / "_candidates"
-    if candidates_dir.is_dir():
-        for p in sorted(candidates_dir.glob("*.md"), reverse=True):
+    skills_dir = root_path / "skills_analyst"
+    if not skills_dir.is_dir():
+        return ""
+
+    # Determine which mission directories to scan
+    if mission_id:
+        mission_dirs = [skills_dir / mission_id]
+    else:
+        mission_dirs = [d for d in skills_dir.iterdir() 
+                       if d.is_dir() and not d.name.startswith("_")]
+
+    for mission_dir in mission_dirs:
+        if not mission_dir.is_dir():
+            continue
+        # Load all approved skill files for this mission
+        for p in sorted(mission_dir.glob("*.md"), reverse=True):
             try:
                 txt = p.read_text(encoding="utf-8", errors="replace")
+                # Re-apply H7 sanitization at load time (defense in depth)
                 cleaned = promote._NOTE_URL_RE.sub("[VERIFIED_SOURCE]", txt)
                 fatal = False
                 for pattern, _ in promote._NOTE_FATAL:
@@ -346,18 +508,20 @@ def load_active_research_skills(root: Path | str | None = None, max_skills: int 
                     for line in cleaned.splitlines():
                         line_s = line.strip()
                         if line_s and not line_s.startswith("#") and not line_s.startswith("Date:") and not line_s.startswith("Key grounded"):
-                            skills.append(line_s[:200])
+                            skills.append(f"[{mission_dir.name}] {line_s[:200]}")
                             break
             except Exception:
                 pass
             if len(skills) >= max_skills:
                 break
+        if len(skills) >= max_skills:
+            break
 
     if not skills:
         return ""
 
     tactics = "\n".join(f"- {s}" for s in skills)
-    return f"\n\nSelf-Improving Research Tactics (Learned from prior successful tasks):\n{tactics}"
+    return f"\n\nSelf-Improving Research Tactics (Operator-Approved Skills):\n{tactics}"
 
 
 def call_provider_with_tools(
@@ -448,6 +612,7 @@ def run_native_research_turn(
     *,
     task_id: int | None = None,
     client_id: str | None = None,
+    mission_id: str | None = None,
     notebook_path: Path | str | None = None,
     max_turns: int = 8,
     custom_caller: Callable[[list[dict[str, Any]], list[dict[str, Any]]], dict[str, Any]] | None = None,
@@ -470,7 +635,7 @@ def run_native_research_turn(
     if notebook and notebook.attempts_seen:
         direction_clause = f"\n\nPrior Research Memory:\n{notebook.direction_block()}"
 
-    skills_clause = load_active_research_skills(root)
+    skills_clause = load_active_research_skills(root, mission_id=mission_id)
 
     system_prompt = (
         "You are an autonomous research analyst. You gather verified, grounded facts using "

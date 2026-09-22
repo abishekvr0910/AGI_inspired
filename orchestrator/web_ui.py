@@ -1242,11 +1242,13 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
                 root_path = _get_root_from_gateway(gw)
                 try:
                     import client_reporter
+                    # Use force_export=True for preview/dossier generation (evidence gate only blocks client-ready export)
                     res = client_reporter.compile_and_export_client_package(
                         client_id,
                         root=root_path,
                         db_path=gw.ledger_db,
                         runs_dir=gw.runs_dir,
+                        force_export=True,
                     )
                     dossier_md = Path(res["dossier_md_path"]).read_text(encoding="utf-8")
                     dossier_html = Path(res["dossier_html_path"]).read_text(encoding="utf-8")
@@ -1270,11 +1272,13 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
                 root_path = _get_root_from_gateway(gw)
                 try:
                     import client_reporter
+                    # Use force_export=True for CSV download (sample generation for review)
                     res = client_reporter.compile_and_export_client_package(
                         client_id,
                         root=root_path,
                         db_path=gw.ledger_db,
                         runs_dir=gw.runs_dir,
+                        force_export=True,
                     )
                     csv_bytes = Path(res["csv_path"]).read_bytes()
                     self.send_response(200)

@@ -24,6 +24,7 @@ for p in (ROOT, ROOT / "orchestrator"):
 from client_profile import client_dir, load_client_profile
 import campaign_builder
 from campaign_builder import Campaign, export_google_ads_editor_csv, export_campaign_json
+from evidence_gate import verify_client_package_export, VerificationStatus
 
 
 def parse_markdown_tables(text: str) -> list[list[dict[str, str]]]:
@@ -247,13 +248,22 @@ def generate_executive_dossier(
     landing_url = client_profile.get("landing_url", "https://example.com")
     geos = ", ".join(client_profile.get("geo", ["Global"]))
     forbidden = ", ".join(f"'{c}'" for c in client_profile.get("forbidden_claims", [])) or "None specified"
+    
+    # Check for sample/verification status
+    is_sample = (
+        client_profile.get("_force_export", False) or
+        client_profile.get("_verification_status") == "sample"
+    )
+    sample_banner = ""
+    if is_sample:
+        sample_banner = "\n> **⚠ SAMPLE MATERIAL — NOT VERIFIED FOR CLIENT USE**\n> This package was generated from synthetic/demonstration data. All contacts, waste estimates, and claims are UNVERIFIED.\n"
 
     lines: list[str] = [
         f"# Executive Strategy & Distribution Audit: {display_name}",
         "",
         "> **Confidential Client Report** | Compiled Deterministically via AGI_like Distribution Engine",
         f"> **Primary Domain:** {domain} | **Market/Geo:** {geos} | **Target URL:** [{landing_url}]({landing_url})",
-        "",
+        sample_banner,
         "---",
         "",
         "## 1. Executive Summary & Brand Positioning",
@@ -370,6 +380,26 @@ def generate_dossier_html(client_profile: dict[str, Any], dossier_markdown: str)
     """Wrap executive dossier markdown in responsive, client-ready dark-mode HTML."""
     display_name = html.escape(client_profile.get("display_name", "Client"))
     domain = html.escape(client_profile.get("domain", "Commercial"))
+    
+    # Check for sample status
+    is_sample = (
+        client_profile.get("_force_export", False) or
+        client_profile.get("_verification_status") == "sample"
+    )
+    sample_banner_html = ""
+    if is_sample:
+        sample_banner_html = """
+    <div class="no-print mb-6 p-4 rounded-xl border-2 border-amber-600 bg-amber-900/30 text-amber-200">
+      <div class="flex items-center gap-3">
+        <svg class="w-6 h-6 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+        <div>
+          <p class="font-bold text-base">SAMPLE MATERIAL — NOT VERIFIED FOR CLIENT USE</p>
+          <p class="text-sm">This package was generated from synthetic/demonstration data. All contacts, waste estimates, and claims are UNVERIFIED.</p>
+        </div>
+      </div>
+    </div>"""
 
     # Convert simple markdown headers, tables, bold, and code to clean HTML
     content_html = []
@@ -456,6 +486,7 @@ def generate_dossier_html(client_profile: dict[str, Any], dossier_markdown: str)
   </header>
 
   <main class="max-w-5xl mx-auto px-6 py-8">
+    {sample_banner_html}
     {body_content}
   </main>
 
@@ -472,11 +503,35 @@ def compile_and_export_client_package(
     root: Path | str | None = None,
     db_path: Path | str | None = None,
     runs_dir: Path | str | None = None,
+    force_export: bool = False,
 ) -> dict[str, Any]:
-    """Compile all deliverables for a client into strategy dossier and Google Ads Editor CSV."""
+    """Compile all deliverables for a client into strategy dossier and Google Ads Editor CSV.
+    
+    Evidence Gate: Blocks client-ready export unless prospect is VERIFIED with operator approval.
+    Use force_export=True only for sample/internal generation (adds SAMPLE watermark).
+    """
+    # Evidence gate check
+    if not force_export:
+        can_export, reason = verify_client_package_export(client_id, root=root)
+        if not can_export:
+            return {
+                "success": False,
+                "client_id": client_id,
+                "error": "EXPORT_BLOCKED",
+                "message": f"Evidence gate blocked export: {reason}. Use force_export=True for sample generation only.",
+                "verification_status": "blocked",
+            }
+    
     prof = load_client_profile(client_id, root=root)
     cdir = client_dir(client_id, root=root)
     deliverables = load_client_deliverables(client_id, root=root, db_path=db_path, runs_dir=runs_dir)
+    
+    # Add verification status to profile for watermarking
+    from evidence_gate import EvidenceGate, VerificationStatus
+    gate = EvidenceGate(root)
+    verification = gate.get(client_id)
+    prof["_verification_status"] = verification.status.value if verification else "unknown"
+    prof["_force_export"] = force_export
 
     # 1. Parse structured findings
     kw_entries = extract_keywords_from_deliverable(deliverables.get("keyword_research", ""))
@@ -505,6 +560,7 @@ def compile_and_export_client_package(
         keywords=kw_entries,
         ad_copies=ad_copy_dicts if ad_copy_dicts else None,
         negatives=neg_entries if neg_entries else None,
+        verified_for_export=not force_export,  # Only verified for export if not forced sample
     )
 
     # 3. Export Google Ads Editor bulk CSV

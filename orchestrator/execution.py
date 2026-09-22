@@ -64,7 +64,8 @@ RESPONSE_RESERVE_TOKENS = 1500   # a deliverable still has to fit in the reply
 
 def hermes_worker(prompt: str, model_cfg: dict, usage_path: Path,
                   timeout: int = WORKER_TIMEOUT_S,
-                  retrieval_profile: str | None = None) -> tuple[str, dict]:
+                  retrieval_profile: str | None = None,
+                  mission_id: str | None = None) -> tuple[str, dict]:
     # SECURITY (docs/INCIDENTS.md 2026-07-18): an unrestricted worker previously wrote
     # its own rows straight into ledger.db/ledgerbook.db and self-graded its own task.
     # Tried `-t web` to strip file/terminal/code tools -- it does NOT map to a real
@@ -267,7 +268,8 @@ def hermes_worker(prompt: str, model_cfg: dict, usage_path: Path,
 
 def native_worker(prompt: str, model_cfg: dict, usage_path: Path,
                   timeout: int = WORKER_TIMEOUT_S,
-                  retrieval_profile: str | None = None) -> tuple[str, dict]:
+                  retrieval_profile: str | None = None,
+                  mission_id: str | None = None) -> tuple[str, dict]:
     """Execute research worker using native agent loop (native_worker.py)."""
     if pause_engaged():
         raise RuntimeError("model execution refused: global ESTOP is engaged")
@@ -310,6 +312,7 @@ def native_worker(prompt: str, model_cfg: dict, usage_path: Path,
                     model_cfg=model_cfg,
                     usage_path=usage_path,
                     task_id=tid,
+                    mission_id=mission_id,
                     notebook_path=notebook_path,
                     custom_caller=custom_caller,
                 )
@@ -504,7 +507,8 @@ def _failover_candidates(worker_cfg: dict, allow_local: bool = True) -> list[dic
 def worker_with_failover(prompt: str, worker_cfg: dict, usage_path: Path,
                          log_prefix: str,
                          allow_local: bool = True,
-                         retrieval_profile: str | None = None
+                         retrieval_profile: str | None = None,
+                         mission_id: str | None = None
                          ) -> tuple[str, dict, dict, bool]:
     """hermes_worker() with failover on QUOTA ERRORS ONLY. A genuine subprocess timeout
     on any one candidate still raises subprocess.TimeoutExpired exactly as before --
@@ -560,9 +564,11 @@ def worker_with_failover(prompt: str, worker_cfg: dict, usage_path: Path,
         if retrieval_profile:
             out, usage = worker_fn(
                 prompt, cfg, attempt_path, timeout=timeout,
-                retrieval_profile=retrieval_profile)
+                retrieval_profile=retrieval_profile,
+                mission_id=mission_id)
         else:
-            out, usage = worker_fn(prompt, cfg, attempt_path, timeout=timeout)
+            out, usage = worker_fn(prompt, cfg, attempt_path, timeout=timeout,
+                                   mission_id=mission_id)
         cfg_used = cfg
         failed = worker_failed(out, usage)
         if not failed:

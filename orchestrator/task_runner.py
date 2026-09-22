@@ -494,6 +494,8 @@ def _run_research_task(context: _TaskContext) -> str:
                 worker_options = {}
                 if context.retrieval_profile != DEFAULT_RETRIEVAL_PROFILE:
                     worker_options["retrieval_profile"] = context.retrieval_profile
+                # Pass mission_id for skill loading
+                worker_options["mission_id"] = mission["id"]
                 out, usage, model_used_cfg, exhausted = execution.worker_with_failover(
                     prompt, worker_cfg, usage_path, log_prefix=f"task {tid}",
                     **worker_options)

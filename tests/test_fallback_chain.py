@@ -143,7 +143,7 @@ with tempfile.TemporaryDirectory() as td:
             {"provider": "ollama", "model": "qwen3.5:2b-q4_K_M-ctx16k", "context_tokens": 16384},
         ]
 
-        def mock_worker(prompt, cfg, attempt_path, timeout=900, retrieval_profile=None):
+        def mock_worker(prompt, cfg, attempt_path, timeout=900, retrieval_profile=None, mission_id=None):
             attempts.append((cfg["provider"], cfg["model"]))
             if cfg["provider"] == "byteplus_coding":
                 return "HTTP 429: weekly usage exhausted", {"process_error": "429"}

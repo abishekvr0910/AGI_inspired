@@ -267,7 +267,7 @@ with tempfile.TemporaryDirectory() as td:
         ]
         call_count = {"n": 0}
 
-        def mock_worker(prompt, cfg, attempt_path, timeout=900):
+        def mock_worker(prompt, cfg, attempt_path, timeout=900, mission_id=None):
             call_count["n"] += 1
             if call_count["n"] == 1:
                 return "HTTP 429: RateLimitExceeded", {"process_error": "429"}
@@ -316,7 +316,7 @@ with tempfile.TemporaryDirectory() as td:
         ]
         call_count = {"n": 0}
 
-        def mock_worker_auth(prompt, cfg, attempt_path, timeout=900):
+        def mock_worker_auth(prompt, cfg, attempt_path, timeout=900, mission_id=None):
             call_count["n"] += 1
             if call_count["n"] == 1:
                 # real captured auth string (task117); classifies as "authentication"

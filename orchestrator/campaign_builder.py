@@ -21,6 +21,23 @@ MAX_DESCRIPTION_LENGTH = 90
 MAX_RSA_HEADLINES = 15
 MAX_RSA_DESCRIPTIONS = 4
 
+# Claims that are commonly forbidden and should never appear in generated ads
+DEFAULT_FORBIDDEN_CLAIMS = [
+    "certified",
+    "insured",
+    "guaranteed",
+    "satisfaction guaranteed",
+    "100% guaranteed",
+    "money back guarantee",
+    "risk free",
+    "free guarantee",
+    "cheapest",
+    "lowest price",
+    "#1",
+    "best",
+    "number one",
+]
+
 
 @dataclass(frozen=True)
 class KeywordTarget:
@@ -103,6 +120,27 @@ def sanitize_theme_name(text: str) -> str:
     return " ".join(w.capitalize() for w in words[:4]) or "General"
 
 
+def _contains_forbidden_claim(text: str, forbidden_claims: list[str]) -> bool:
+    """Check if text contains any forbidden claim (case-insensitive)."""
+    text_lower = text.lower()
+    for claim in forbidden_claims:
+        if claim.lower() in text_lower:
+            return True
+    return False
+
+
+def filter_forbidden_claims(
+    headlines: list[str],
+    descriptions: list[str],
+    forbidden_claims: list[str],
+) -> tuple[list[str], list[str]]:
+    """Filter out headlines and descriptions containing forbidden claims."""
+    all_forbidden = DEFAULT_FORBIDDEN_CLAIMS + [c.lower() for c in forbidden_claims]
+    clean_headlines = [h for h in headlines if not _contains_forbidden_claim(h, all_forbidden)]
+    clean_descriptions = [d for d in descriptions if not _contains_forbidden_claim(d, all_forbidden)]
+    return clean_headlines, clean_descriptions
+
+
 def build_campaign_from_research(
     client_profile: dict[str, Any],
     keywords: list[dict[str, Any]],
@@ -111,14 +149,25 @@ def build_campaign_from_research(
     *,
     campaign_name: str | None = None,
     daily_budget: float = 50.0,
+    verified_for_export: bool = False,
 ) -> Campaign:
-    """Compile research findings into a structured Google Ads Campaign."""
+    """Compile research findings into a structured Google Ads Campaign.
+    
+    Args:
+        verified_for_export: If True, campaign is for verified client export.
+                           If False, forbidden claims are still filtered but
+                           campaign is marked as sample-only.
+    """
     client_id = client_profile.get("client_id", "unknown-client")
     display_name = client_profile.get("display_name", client_id)
     landing_url = client_profile.get("landing_url", "https://example.com")
     name = campaign_name or f"{display_name} - Search - {client_profile.get('domain', 'Core')}"
+    
+    # Get forbidden claims from client profile + defaults
+    forbidden_claims = client_profile.get("forbidden_claims", [])
 
     campaign = Campaign(name=name, client_id=client_id, daily_budget=daily_budget)
+    campaign.verified_for_export = verified_for_export  # type: ignore[attr-defined]
 
     # 1. Compile Campaign-level Negatives
     if negatives:
@@ -140,25 +189,36 @@ def build_campaign_from_research(
         theme = str(item.get("theme") or item.get("intent") or sanitize_theme_name(kw))
         theme_groups.setdefault(theme, []).append(item)
 
-    # 3. Compile Ad Copies for reuse across Ad Groups (targeting Excellent Ad Strength: 10-15 headlines, 4 descriptions)
+    # 3. Compile Ad Copies for reuse across Ad Groups (targeting Excellent Ad Strength: 15 headlines, 4 descriptions)
+    # Expanded default headlines to reach 15 after forbidden-claim filtering
     default_headlines = [
         f"{display_name}"[:MAX_HEADLINE_LENGTH],
         f"Fast & Reliable Service"[:MAX_HEADLINE_LENGTH],
         f"Get A Free Quote Today"[:MAX_HEADLINE_LENGTH],
         f"Experienced Local Team"[:MAX_HEADLINE_LENGTH],
         f"Transparent Pricing"[:MAX_HEADLINE_LENGTH],
-        f"Certified & Insured Pros"[:MAX_HEADLINE_LENGTH],
+        f"Licensed & Bonded Pros"[:MAX_HEADLINE_LENGTH],  # Replaces "Certified & Insured"
         f"Top-Rated Local Service"[:MAX_HEADLINE_LENGTH],
         f"Call Our Specialists Today"[:MAX_HEADLINE_LENGTH],
         f"Same-Day Consultations"[:MAX_HEADLINE_LENGTH],
         f"Flexible Payment Options"[:MAX_HEADLINE_LENGTH],
+        f"24/7 Emergency Service"[:MAX_HEADLINE_LENGTH],
+        f"Free On-Site Estimates"[:MAX_HEADLINE_LENGTH],
+        f"Decades of Experience"[:MAX_HEADLINE_LENGTH],
+        f"Locally Owned & Operated"[:MAX_HEADLINE_LENGTH],
+        f"Commercial Specialists"[:MAX_HEADLINE_LENGTH],
     ]
     default_descriptions = [
-        f"Contact {display_name} today for certified and dependable service. Call for free quote!"[:MAX_DESCRIPTION_LENGTH],
-        f"Transparent pricing with zero hidden fees. Satisfaction guaranteed on every project."[:MAX_DESCRIPTION_LENGTH],
+        f"Contact {display_name} today for dependable service. Call for free quote!"[:MAX_DESCRIPTION_LENGTH],
+        f"Transparent pricing with zero hidden fees. Quality work on every project."[:MAX_DESCRIPTION_LENGTH],
         f"Proven expertise and reliable support from our local specialists. Book consult today!"[:MAX_DESCRIPTION_LENGTH],
         f"High quality solutions tailored to your needs. Schedule your appointment now."[:MAX_DESCRIPTION_LENGTH],
     ]
+
+    # Filter forbidden claims from defaults BEFORE use
+    default_headlines, default_descriptions = filter_forbidden_claims(
+        default_headlines, default_descriptions, forbidden_claims
+    )
 
     custom_rsa = RSAAd(headlines=list(default_headlines), descriptions=list(default_descriptions), final_url=landing_url)
     if ad_copies:
@@ -167,17 +227,21 @@ def build_campaign_from_research(
             d_list = copy_entry.get("descriptions") or []
             if h_list:
                 cleaned_h = [str(h)[:MAX_HEADLINE_LENGTH] for h in h_list[:MAX_RSA_HEADLINES]]
-                # Supplement with defaults to ensure >= 8 headlines for Excellent Ad Strength
+                # Filter custom headlines for forbidden claims
+                cleaned_h, _ = filter_forbidden_claims(cleaned_h, [], forbidden_claims)
+                # Supplement with defaults to ensure 15 headlines for Excellent Ad Strength
                 for dh in default_headlines:
-                    if len(cleaned_h) >= 12:
+                    if len(cleaned_h) >= MAX_RSA_HEADLINES:
                         break
                     if dh not in cleaned_h:
                         cleaned_h.append(dh)
                 custom_rsa.headlines = cleaned_h
             if d_list:
                 cleaned_d = [str(d)[:MAX_DESCRIPTION_LENGTH] for d in d_list[:MAX_RSA_DESCRIPTIONS]]
+                # Filter custom descriptions for forbidden claims
+                _, cleaned_d = filter_forbidden_claims([], cleaned_d, forbidden_claims)
                 for dd in default_descriptions:
-                    if len(cleaned_d) >= 4:
+                    if len(cleaned_d) >= MAX_RSA_DESCRIPTIONS:
                         break
                     if dd not in cleaned_d:
                         cleaned_d.append(dd)
@@ -256,9 +320,19 @@ def export_campaign_json(campaign: Campaign, target_path: Path | str) -> Path:
 
 
 def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) -> Path:
-    """Export campaign structure in Google Ads Editor bulk CSV format."""
+    """Export campaign structure in Google Ads Editor bulk CSV format.
+    
+    If campaign is not verified_for_export, adds SAMPLE_ prefix to campaign name
+    and includes a comment row warning about sample status.
+    """
     p = Path(target_path)
     p.parent.mkdir(parents=True, exist_ok=True)
+
+    # Check if campaign is verified for client export
+    is_verified = getattr(campaign, "verified_for_export", False)
+    campaign_name = campaign.name
+    if not is_verified:
+        campaign_name = f"SAMPLE_{campaign_name}"
 
     headers = [
         "Campaign",
@@ -290,12 +364,20 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
 
     with open(p, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
+        
+        # Add sample warning as first row (Google Ads Editor ignores rows without Campaign name)
+        if not is_verified:
+            writer.writerow([
+                "# SAMPLE CAMPAIGN - NOT VERIFIED FOR CLIENT USE",
+                "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
+            ])
+        
         writer.writerow(headers)
 
         # 1. Campaign-level negative keywords
         for neg in campaign.campaign_negatives:
             writer.writerow([
-                campaign.name,
+                campaign_name,
                 "",  # Campaign negative has empty Ad Group
                 neg.text,
                 f"Negative {neg.match_type}",
@@ -306,7 +388,7 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
             # Positive keywords
             for kw in ag.keywords:
                 writer.writerow([
-                    campaign.name,
+                    campaign_name,
                     ag.name,
                     kw.text,
                     kw.match_type,
@@ -315,7 +397,7 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
             # Ad Group level negatives
             for neg in ag.negatives:
                 writer.writerow([
-                    campaign.name,
+                    campaign_name,
                     ag.name,
                     neg.text,
                     f"Negative {neg.match_type}",
@@ -326,7 +408,7 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
                 hl = [(ad.headlines[i] if i < len(ad.headlines) else "") for i in range(15)]
                 dl = [(ad.descriptions[i] if i < len(ad.descriptions) else "") for i in range(4)]
                 writer.writerow([
-                    campaign.name,
+                    campaign_name,
                     ag.name,
                     "",  # Ad row has empty keyword
                     "",

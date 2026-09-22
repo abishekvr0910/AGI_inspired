@@ -34,7 +34,7 @@ QUOTA = "Error: 429 too many requests"
 
 def fake_worker(quota_for):
     """Return a hermes_worker stub that 429s for the named models, succeeds otherwise."""
-    def _w(prompt, cfg, path, timeout=None):
+    def _w(prompt, cfg, path, timeout=None, mission_id=None):
         attempted.append(cfg["model"])
         return (QUOTA if cfg["model"] in quota_for else "real answer text"), {}
     return _w

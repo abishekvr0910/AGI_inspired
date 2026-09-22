@@ -347,7 +347,7 @@ primary = {"provider": "ollama", "model": "primary:cloud", "context_window": 100
 fallback = {"provider": "ollama", "model": "fallback:cloud", "context_window": 10000}
 try:
     execution._failover_candidates = lambda cfg, allow_local=True: [primary, fallback]
-    def fake_quota_worker(prompt, cfg, attempt_path, timeout):
+    def fake_quota_worker(prompt, cfg, attempt_path, timeout, **kwargs):
         if cfg["model"] == "primary:cloud":
             return ("", {"process_error": "HTTP 429: Rate limit exceeded on Ollama Cloud",
                          "process_returncode": 1})
