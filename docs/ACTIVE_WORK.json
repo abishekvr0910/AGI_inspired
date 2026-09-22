@@ -1,7 +1,58 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-09-20T05:20:00Z",
+  "last_updated": "2026-09-22T09:55:00Z",
   "active_agents": [
+    {
+      "agent": "opencode",
+      "role": "Tier Manifest Registration, Honest Gate Correction, and Codex Batch Commit",
+      "task_id": "OPENCODE-TIER-MANIFEST-AND-COMMIT-2026-09-22",
+      "mode": "active",
+      "owned_paths": [
+        "tests/tiers.json",
+        "docs/CURRENT_STATE.md",
+        "docs/ACTIVE_WORK.json",
+        ".harness/continuity/current.json",
+        "docs/reviews/OPENCODE_TIER_MANIFEST_AND_COMMIT_2026-09-22.md",
+        "docs/OPENCODE_TASK_TIER_MANIFEST_AND_COMMIT_2026-09-22.md",
+        "orchestrator/evidence_gate.py",
+        "orchestrator/campaign_builder.py",
+        "orchestrator/client_reporter.py",
+        "orchestrator/distribution.py",
+        "orchestrator/execution.py",
+        "orchestrator/native_worker.py",
+        "orchestrator/task_runner.py",
+        "orchestrator/web_ui.py",
+        "tests/test_campaign_builder_regression.py",
+        "tests/test_architecture_blockers.py",
+        "tests/test_client_reporter.py",
+        "tests/test_distribution_cli.py",
+        "tests/test_distribution_phase2.py",
+        "tests/test_native_worker.py",
+        "tests/test_web_ui.py"
+      ],
+      "started_at": "2026-09-22T09:55:00Z",
+      "last_update": "2026-09-22T11:30:00Z",
+      "status": "completed",
+      "blocked_by": null,
+      "handoff_path": "docs/reviews/OPENCODE_TIER_MANIFEST_AND_COMMIT_2026-09-22.md",
+      "notes": "Completed: Registered test_campaign_builder_regression in tests/tiers.json unit tier; canonical gate 97/97 suites green (unit 82, containment 8, integration 7) — rev 150's '119/119' was pytest count, not run_all suite count; corrected false claims in brief rev 151 and docs/CURRENT_STATE.md; committed Codex batch in 2 scoped commits (feat + chore(continuity)); no push, no ESTOP change, model-free only."
+    },
+    {
+      "agent": "hermes",
+      "role": "Independent Reviewer (read-only): Tier-manifest/gate verification pass, opencode directive author, final review of registration + commits",
+      "task_id": "HERMES-REVIEW-GATE-VERIFICATION-2026-09-22",
+      "mode": "review",
+      "owned_paths": [
+        "docs/OPENCODE_TASK_TIER_MANIFEST_AND_COMMIT_2026-09-22.md",
+        "docs/ACTIVE_WORK.json"
+      ],
+      "started_at": "2026-09-22T09:30:00Z",
+      "last_update": "2026-09-22T09:55:00Z",
+      "status": "in_progress",
+      "blocked_by": null,
+      "handoff_path": "docs/OPENCODE_TASK_TIER_MANIFEST_AND_COMMIT_2026-09-22.md",
+      "notes": "Read-only takeover verification pass (2026-09-22 09:50Z): measured canonical gate RED exit 2 (INVALID TEST TIER MANIFEST, unassigned=[test_campaign_builder_regression]); new suite standalone 12/12 OK; brief rev 150 gate claim 119/119 is false (pytest count, not run_all; tier totals sum to 96). Authored opencode directive and registered both entries. Will independently verify opencode's gate output and commits on completion. No code edits, no live calls, ESTOP untouched."
+    },
     {
       "agent": "gemini-cli",
       "role": "Commercial Distribution Engine: Enterprise Sample (ClearChoice Dental), 3 High-Ticket Pilots, Outreach Playbook, and Table Parser Hardening",

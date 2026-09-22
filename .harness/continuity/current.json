@@ -1,28 +1,29 @@
 {
   "schema_version": 2,
-  "brief_revision": 149,
-  "created_at": "2026-09-20T11:14:44.813834+00:00",
+  "brief_revision": 151,
+  "created_at": "2026-09-22T06:30:00.000000+00:00",
   "status": "completed",
   "repository": {
     "branch": "product/v1-completion-2026-09-15",
     "upstream": "origin/product/v1-completion-2026-09-15",
     "tree_clean": true,
     "changed_paths": [],
-    "based_on_head": "697d6ce241bb571d7b7dc0608a4cafb0fdf88438"
+    "based_on_head": "523caa3bb923493c43bed8abec46619b6ba56159"
   },
   "task": {
-    "id": "COMMERCIAL-FIREPOWER-OUTBOUND-PIPELINE-2026-09-20",
-    "phase": "venture_outbound_armed",
+    "id": "CODEX-CLAIMS-RESOLUTION-2026-09-22",
+    "phase": "codex_claims_resolved",
     "status": "completed",
-    "next_action": "RSA depth upgraded to 15 headlines and 4 descriptions in campaign_builder.py. 8-prospect outbound pipeline armed with pitch emails in workspace/outbound_pitches/ and tracker in workspace/PROSPECT_TRACKER.csv. Gate 96/96 green. ESTOP engaged."
+    "next_action": "All 6 Codex claims resolved: Evidence Gate, Forbidden Claims, Skills Gate, CDP Browser, Regression Tests, Verified Client. 97/97 suites green (unit 82, containment 8, integration 7). Rev 150's '119/119' was a pytest-count claim recorded while gate was invalid (fixed by tier manifest registration). ESTOP engaged."
   },
   "completed": [
-    "Expanded RSA generation to 15 headlines and 4 descriptions for Excellent Ad Strength",
-    "Updated Google Ads Editor CSV export with 25-column schema",
-    "Built scripts/generate_prospect_pipeline.py and compiled 8 prospect audits",
-    "Generated 8 custom cold pitch emails in workspace/outbound_pitches/",
-    "Populated workspace/PROSPECT_TRACKER.csv with real contacts and waste metrics",
-    "Verified gate at 96/96 suites green"
+    "Commercial Evidence Gate: sample/unverified/verified separation, export blocking, 8 prospects relabeled SAMPLE",
+    "Campaign Builder: forbidden claims filtered, 15 headlines, SAMPLE_ prefix on unverified CSV",
+    "Native Skills Gate: loads only operator-approved from skills_analyst/<mission>/, not _candidates/",
+    "Native CDP Browser: genuine WebSocket+CDP DOM extraction, HTTP fallback only on failure",
+    "Tier manifest registration: test_campaign_builder_regression added to unit tier",
+    "Regression Tests: 97/97 suites green (unit 82, containment 8, integration 7) — rev 150's '119/119' was pytest count, not suite count",
+    "Verified Client Added: el-shaddai-coffee-katowice with real evidence, dossier + CSV generated"
   ],
   "locked_constraints": [
     "ESTOP engaged; zero live execution active",
@@ -33,7 +34,7 @@
   ],
   "gate": {
     "status": "passed",
-    "detail": "96/96 suites green (tiers: unit 81, containment 8, integration 7), exit 0, zero FAIL lines. Attestation Ed25519-verified. ESTOP True, 0 zombies."
+    "detail": "97/97 suites green (tiers: unit 82, containment 8, integration 7), exit 0, zero FAIL lines. Attestation Ed25519-verified. ESTOP True, 0 zombies."
   },
   "references": [
     {
