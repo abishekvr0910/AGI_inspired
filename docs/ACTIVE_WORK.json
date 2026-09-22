@@ -48,10 +48,10 @@
       ],
       "started_at": "2026-09-22T09:30:00Z",
       "last_update": "2026-09-22T09:55:00Z",
-      "status": "in_progress",
+      "status": "completed",
       "blocked_by": null,
-      "handoff_path": "docs/OPENCODE_TASK_TIER_MANIFEST_AND_COMMIT_2026-09-22.md",
-      "notes": "Read-only takeover verification pass (2026-09-22 09:50Z): measured canonical gate RED exit 2 (INVALID TEST TIER MANIFEST, unassigned=[test_campaign_builder_regression]); new suite standalone 12/12 OK; brief rev 150 gate claim 119/119 is false (pytest count, not run_all; tier totals sum to 96). Authored opencode directive and registered both entries. Will independently verify opencode's gate output and commits on completion. No code edits, no live calls, ESTOP untouched."
+      "handoff_path": "docs/reviews/HERMES_VERIFICATION_TIER_MANIFEST_AND_COMMIT_2026-09-22.md",
+      "notes": "COMPLETED. Independently re-verified opencode's work (2026-09-22 13:05Z): own gate run 97/97 suites green exit 0 (was RED exit 2 pre-fix); commits f0b15d1 + 5f63587 verified scoped and disjoint, tree clean, 15 ahead/0 behind (no push, Rule 28); zero residual 119/119 claims in brief or CURRENT_STATE; rev 151 honest. Scope deviation (4 test files outside declared paths) reviewed: all diffs are minimal mission_id=None mock-signature fixes required by the batch's parameter threading, disclosed in handoff — ruled legitimate. Verification doc: docs/reviews/HERMES_VERIFICATION_TIER_MANIFEST_AND_COMMIT_2026-09-22.md. Scope released."
     },
     {
       "agent": "gemini-cli",
