@@ -666,8 +666,11 @@ def _run_research_task(context: _TaskContext) -> str:
             break
         repair_attempt += 1
         rc.log(f"task {tid}: preflight repair attempt {repair_attempt}/{deliverable_preflight.MAX_REPAIR_ATTEMPTS} triggered")
+        needs_research = deliverable_preflight.requires_active_research(preflight_report)
         repair_prompt = deliverable_preflight.build_repair_prompt(
-            prompt, out, preflight_report.repair_feedback + "\n\n" + notebook.direction_block())
+            prompt, out, preflight_report.repair_feedback + "\n\n" + notebook.direction_block(),
+            requires_research=needs_research,
+        )
         repair_usage_path = rc.RUNS / f"task{tid}_a{attempt}_worker_repair_{repair_attempt}.usage.json"
         if not repair_usage_path.is_file():
             repair_usage_path.parent.mkdir(parents=True, exist_ok=True)
@@ -675,11 +678,14 @@ def _run_research_task(context: _TaskContext) -> str:
                 repair_usage_path.write_text(json.dumps(policy_snapshot, indent=2) + "\n", encoding="utf-8")
             except Exception:
                 pass
+        repair_worker_options = dict(worker_options)
+        if needs_research:
+            repair_worker_options["enforce_active_research"] = True
         try:
             with protect_metadata(*control_paths), integrity.DatabaseMutationGuard(f"task {tid} worker repair {repair_attempt}"), _workspace_confinement_guard(tid, f"task {tid} worker repair {repair_attempt}", client_id=client_id):
                 r_out, r_usage, r_model_cfg, r_exhausted = execution.worker_with_failover(
                     repair_prompt, worker_cfg, repair_usage_path, log_prefix=f"task {tid} repair {repair_attempt}",
-                    **worker_options)
+                    **repair_worker_options)
             if chained:
                 chain.append_step(rc.RUNS, chain.Step.WORKER, tid, attempt,
                     {"model": {k: r_model_cfg.get(k) for k in ("provider", "model")}, "input_tokens": r_usage.get("input_tokens", 0),

@@ -516,7 +516,77 @@ class NativeWorkerTests(unittest.TestCase):
                         mock_fetch.assert_called_once_with("https://example.com")
                         self.assertEqual(res["title"], "HTTP Title")
 
+    def test_enforce_active_research_reprompts_on_zero_tools(self):
+        """enforce_active_research re-prompts the model on turn 0 if it tries to answer without tools."""
+        turns = []
+        def mock_caller(messages, tools):
+            turns.append(len(messages))
+            if len(turns) == 1:
+                # Turn 0: model attempts to answer without calling any tools
+                return {
+                    "message": {"role": "assistant", "content": "Here is my immediate answer without tools."},
+                    "input_tokens": 50,
+                    "output_tokens": 20,
+                }
+            elif len(turns) == 2:
+                # Turn 1: model saw mandatory re-prompt user message, now issues web_search
+                return {
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [{
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {"name": "web_search", "arguments": json.dumps({"query": "verified evidence"})}
+                        }]
+                    },
+                    "input_tokens": 100,
+                    "output_tokens": 25,
+                }
+            else:
+                # Turn 2: model provides deliverable citing search results
+                return {
+                    "message": {"role": "assistant", "content": "Deliverable grounded in verified search evidence: https://a.example"},
+                    "input_tokens": 120,
+                    "output_tokens": 30,
+                }
+
+        with patch("native_worker.execute_web_search", return_value=[{"title": "Result", "url": "https://a.example", "snippet": "snippet"}]):
+            with patch("native_worker.pause_engaged", return_value=False):
+                deliv, usage = native_worker.run_native_research_turn(
+                    prompt="Conduct deep research on competitive landscape.",
+                    model_cfg={"provider": "mock"},
+                    custom_caller=mock_caller,
+                    enforce_active_research=True,
+                )
+                self.assertEqual(len(turns), 3)
+                self.assertIn("Deliverable grounded in verified search", deliv)
+                self.assertEqual(usage["tool_calls_executed"], 1)
+
+    def test_enforce_active_research_disabled_allows_immediate_text(self):
+        """When enforce_active_research=False, zero-tool answers on turn 0 are accepted directly."""
+        turns = []
+        def mock_caller(messages, tools):
+            turns.append(len(messages))
+            return {
+                "message": {"role": "assistant", "content": "Immediate text without tools."},
+                "input_tokens": 40,
+                "output_tokens": 15,
+            }
+
+        with patch("native_worker.pause_engaged", return_value=False):
+            deliv, usage = native_worker.run_native_research_turn(
+                prompt="Quick question.",
+                model_cfg={"provider": "mock"},
+                custom_caller=mock_caller,
+                enforce_active_research=False,
+            )
+            self.assertEqual(len(turns), 1)
+            self.assertEqual(deliv, "Immediate text without tools.")
+            self.assertEqual(usage["tool_calls_executed"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

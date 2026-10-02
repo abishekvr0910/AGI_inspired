@@ -617,6 +617,7 @@ def run_native_research_turn(
     max_turns: int = 8,
     custom_caller: Callable[[list[dict[str, Any]], list[dict[str, Any]]], dict[str, Any]] | None = None,
     root: Path | str | None = None,
+    enforce_active_research: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     """Execute one autonomous research turn natively without external CLI dependencies.
 
@@ -675,6 +676,19 @@ def run_native_research_turn(
         tool_calls = msg.get("tool_calls", [])
 
         if not tool_calls:
+            if enforce_active_research and tool_calls_executed == 0 and turn_idx == 0:
+                # Model attempted zero-tool completion under mandatory active research mandate:
+                # Re-prompt model to execute retrieval tools before drafting deliverable.
+                messages.append(msg)
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "MANDATORY REQUIREMENT: You must NOT answer immediately from internal memory without conducting active research. "
+                        "You must invoke the web_search or web_fetch tools to discover and verify external "
+                        "sources before drafting your deliverable. Execute your search tool call now."
+                    )
+                })
+                continue
             # Final completion text reached
             deliverable = str(msg.get("content") or "")
             break

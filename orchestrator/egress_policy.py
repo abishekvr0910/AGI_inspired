@@ -152,7 +152,12 @@ def boundary_state(
     env = os.environ if environment is None else environment
     raw_path = str(env.get(policy.attestation_env) or "").strip()
     if not raw_path:
-        return {"ok": False, "error": "attestation_missing", "policy_digest": policy.digest}
+        if environment is None:
+            default_signed = policy_path.resolve().parents[1] / ".harness" / "egress_attestation.signed"
+            if default_signed.is_file():
+                raw_path = str(default_signed)
+        if not raw_path:
+            return {"ok": False, "error": "attestation_missing", "policy_digest": policy.digest}
     path = Path(raw_path)
     try:
         token = path.read_text(encoding="utf-8").strip()

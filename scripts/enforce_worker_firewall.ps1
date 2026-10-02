@@ -195,6 +195,9 @@ function Invoke-Verify {
     # Check attestation environment
     $attestationVar = "HARNESS_EGRESS_ATTESTATION"
     $attestationPath = [Environment]::GetEnvironmentVariable($attestationVar)
+    if ([string]::IsNullOrWhiteSpace($attestationPath) -and (Test-Path -LiteralPath (Join-Path $repoRoot ".harness\egress_attestation.signed"))) {
+        $attestationPath = Join-Path $repoRoot ".harness\egress_attestation.signed"
+    }
     $attestationValid = $false
     $attestationError = "not_configured"
 

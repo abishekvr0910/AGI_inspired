@@ -269,7 +269,8 @@ def hermes_worker(prompt: str, model_cfg: dict, usage_path: Path,
 def native_worker(prompt: str, model_cfg: dict, usage_path: Path,
                   timeout: int = WORKER_TIMEOUT_S,
                   retrieval_profile: str | None = None,
-                  mission_id: str | None = None) -> tuple[str, dict]:
+                  mission_id: str | None = None,
+                  enforce_active_research: bool = False) -> tuple[str, dict]:
     """Execute research worker using native agent loop (native_worker.py)."""
     if pause_engaged():
         raise RuntimeError("model execution refused: global ESTOP is engaged")
@@ -315,6 +316,7 @@ def native_worker(prompt: str, model_cfg: dict, usage_path: Path,
                     mission_id=mission_id,
                     notebook_path=notebook_path,
                     custom_caller=custom_caller,
+                    enforce_active_research=enforce_active_research,
                 )
         return out, usage
     except Exception as exc:
@@ -508,7 +510,9 @@ def worker_with_failover(prompt: str, worker_cfg: dict, usage_path: Path,
                          log_prefix: str,
                          allow_local: bool = True,
                          retrieval_profile: str | None = None,
-                         mission_id: str | None = None
+                         mission_id: str | None = None,
+                         enforce_active_research: bool = False,
+                         **extra_worker_options
                          ) -> tuple[str, dict, dict, bool]:
     """hermes_worker() with failover on QUOTA ERRORS ONLY. A genuine subprocess timeout
     on any one candidate still raises subprocess.TimeoutExpired exactly as before --
@@ -561,14 +565,15 @@ def worker_with_failover(prompt: str, worker_cfg: dict, usage_path: Path,
             or "hermes"
         ).lower()
         worker_fn = native_worker if worker_engine == "native" else hermes_worker
+        worker_kwargs: dict[str, Any] = {
+            "timeout": timeout,
+            "mission_id": mission_id,
+        }
         if retrieval_profile:
-            out, usage = worker_fn(
-                prompt, cfg, attempt_path, timeout=timeout,
-                retrieval_profile=retrieval_profile,
-                mission_id=mission_id)
-        else:
-            out, usage = worker_fn(prompt, cfg, attempt_path, timeout=timeout,
-                                   mission_id=mission_id)
+            worker_kwargs["retrieval_profile"] = retrieval_profile
+        if worker_engine == "native":
+            worker_kwargs["enforce_active_research"] = enforce_active_research
+        out, usage = worker_fn(prompt, cfg, attempt_path, **worker_kwargs)
         cfg_used = cfg
         failed = worker_failed(out, usage)
         if not failed:

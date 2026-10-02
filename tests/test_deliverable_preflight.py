@@ -29,6 +29,7 @@ from deliverable_preflight import (
     check_citation_metadata,
     check_schema,
     format_repair_feedback,
+    requires_active_research,
     run_preflight,
 )
 
@@ -1001,6 +1002,51 @@ def test_spec_compliance_declared_blocked_counts_as_attempt():
     assert not any("Missing bounded-failure section" in iss for iss in issues)
 
 
+def test_requires_active_research_detection():
+    """Verify requires_active_research correctly distinguishes research vs formatting deficits."""
+    # 1. Dead URLs require research
+    rep_dead = PreflightReport(passed=False, dead_urls=[{"url": "https://example.com/404"}])
+    assert requires_active_research(rep_dead) is True
+
+    # 2. Insufficient verified sources require research
+    rep_insuf = PreflightReport(
+        passed=False,
+        schema_issues=["Insufficient verified sources: found 0 OK, minimum 2"]
+    )
+    assert requires_active_research(rep_insuf) is True
+
+    # 3. Insufficient source count requires research
+    rep_src_count = PreflightReport(
+        passed=False,
+        schema_issues=["Insufficient source count: deliverable cites 1 sources, spec requires at least 3."]
+    )
+    assert requires_active_research(rep_src_count) is True
+
+    # 4. Pure formatting deficit (e.g. table omission) does not require active research
+    rep_fmt = PreflightReport(
+        passed=False,
+        schema_issues=["Specification requires a comparison table/matrix, but no valid markdown table was found."]
+    )
+    assert requires_active_research(rep_fmt) is False
+
+
+def test_build_repair_prompt_mandates_research_banner():
+    """Verify build_repair_prompt injects research banner only when requires_research=True."""
+    base = "Original mission prompt."
+    draft = "My previous draft answer."
+    feedback = "Feedback: Missing sources."
+
+    prompt_no_res = build_repair_prompt(base, draft, feedback, requires_research=False)
+    assert "MANDATORY ACTIVE RE-SEARCH REQUIRED" not in prompt_no_res
+    assert "Original mission prompt." in prompt_no_res
+    assert "My previous draft answer." in prompt_no_res
+
+    prompt_res = build_repair_prompt(base, draft, feedback, requires_research=True)
+    assert "MANDATORY ACTIVE RE-SEARCH REQUIRED" in prompt_res
+    assert "Do NOT attempt to solve this deficit by reformatting existing text" in prompt_res
+    assert "Original mission prompt." in prompt_res
+
+
 if __name__ == "__main__":
     test_clean_deliverable_passes()
     test_dead_url_triggers_preflight_failure()
@@ -1045,5 +1091,8 @@ if __name__ == "__main__":
     test_spec_compliance_sufficient_sources_and_bounded_failure_passes()
     test_spec_compliance_no_spec_requirement_fails_open()
     test_spec_compliance_declared_blocked_counts_as_attempt()
-    print("ALL 43 DELIVERABLE PREFLIGHT TESTS PASSED!")
+    test_requires_active_research_detection()
+    test_build_repair_prompt_mandates_research_banner()
+    print("ALL 45 DELIVERABLE PREFLIGHT TESTS PASSED!")
+
 

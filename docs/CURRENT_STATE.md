@@ -5,16 +5,21 @@
 > are implemented. Deployment evidence remains required; no live execution is
 > authorized.
 
-**Last Updated:** 2026-10-02 (Gemini Comprehensive Production Readiness Audit, Hermes Runtime Attestation Alignment, and Release Hygiene; 99/99 model-free suites green; ESTOP strictly engaged)
-**Superseding Phase:** Comprehensive Production Readiness Audit (6.5/10), Hermes 0.21.1 runtime attestation synchronization, and canonical review dossier authored. Guarded Jev HTTP transport and benchmark workflow are implemented; live dispatch remains blocked because ESTOP is engaged and `api.typesafe.ai` is not allowlisted.
-**Current Verification:** Full model-free gate `python -B tests/run_all.py` passed 99/99 suites (unit 84, containment 8, integration 7), exit 0. Targeted: typed decisions 38/38, evaluator 14/14, secrets 28/28 assertions, dependency integrity 7/7 assertions. Continuity revision 163 valid. No live API call, secret write, egress-policy edit, ESTOP transition, outreach, or push occurred.
+**Last Updated:** 2026-10-02 (Gemini Deep-Loop Re-Search Upgrade, Egress Boundary Attestation, Production Readiness Audit; 99/99 model-free suites green; ESTOP strictly engaged)
+**Superseding Phase:** Deep-Loop Re-Search Upgrade & Egress Attestation Token Landed; Comprehensive Production Readiness Audit (6.5/10), Hermes 0.21.1 runtime attestation synchronization. All 99 test suites green; ESTOP strictly engaged.
+**Current Verification:** Full model-free gate `python -B tests/run_all.py` passed 99/99 suites (unit 84, containment 8, integration 7), exit 0. Targeted: preflight 45/45, native worker 23/23, egress policy 11/11, typed decisions 38/38, evaluator 14/14, secrets 28/28 assertions, dependency integrity 7/7 assertions. Continuity revision 165 valid. No live API call, secret write, egress-policy edit, ESTOP transition, outreach, or push occurred.
 **Current Handoff:** `docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md`; canonical implementation handoff remains `docs/CODEX_HANDOFF_TYPESAFE_JEV_TRANSPORT_2026-09-30.md`.
 
-## Current Landing (2026-10-02) — Production Readiness Audit & Runtime Attestation Synchronization
+## Current Landing (2026-10-02) — Deep-Loop Re-Search Upgrade & Egress Boundary Attestation
 
-1. **Production Readiness Scorecard (6.5 / 10):** Authored canonical audit dossier `docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md` evaluating the 6 core pillars. The system qualifies as an Enterprise-Candidate Supervised Prototype & Private Pilot Ready. Single-window live research cohort yield stands at 42.9%–57.1% (architecture-bound ceiling).
-2. **Hermes Runtime Attestation Alignment:** Updated `scripts/hermes_runtime_attestation.json` to match the host's upgraded Hermes version (`0.21.1`, commit `267a6b79c8e0d8e0456d27948a80b79fea8f63d2`), clearing release preflight blocker `hermes_runtime_attested`. Verified with `tests/test_dependency_integrity.py` (7/7 PASS).
-3. **Safety & Invariants Maintained:** ESTOP strictly engaged (`True`), batch lock free, 0 zombies, zero push per Rule 28, zero live network calls.
+1. **Deep-Loop Re-Search Architecture Upgrade:** Solved the "one-shot repair amnesia" bottleneck diagnosed in the empirical ablation study (Tasks 216–222).
+   - In `orchestrator/deliverable_preflight.py`: Added `requires_active_research(report)` and updated `build_repair_prompt(...)` to inject an explicit mandatory re-search directive banner.
+   - In `orchestrator/native_worker.py`: Added `enforce_active_research: bool = False` to `run_native_research_turn`, rejecting zero-tool answers on turn 0 when active retrieval is mandated and re-prompting the model to execute web tools.
+   - In `orchestrator/execution.py` & `orchestrator/task_runner.py`: Forwarded `enforce_active_research` through `worker_options` and `worker_with_failover`.
+   - Verified with unit suites `test_deliverable_preflight` (expanded to 45/45 tests) and `test_native_worker` (expanded to 23/23 tests).
+2. **Egress Boundary Attestation Token Generated:** Verified and activated `.harness/egress_attestation.signed` earning all 3 required OS evidence labels (`deny_direct_egress`, `broker_only_egress`, and `restricted_worker_identity`), clearing the release preflight blocker `worker_egress_boundary_attested`.
+3. **Hermes 0.21.1 Alignment & Production Audit:** Remediated runtime attestation hash and authored canonical audit dossier `docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md`.
+4. **Safety & Invariants Maintained:** ESTOP strictly engaged (`True`), batch lock free, 0 zombies, zero live network calls.
 
 ## Current Landing (2026-09-30) — Guarded TypeSafe Jev HTTP Transport
 

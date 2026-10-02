@@ -504,9 +504,42 @@ def format_repair_feedback(
     return "\n".join(lines)
 
 
-def build_repair_prompt(base_prompt: str, current_deliverable: str, feedback: str) -> str:
+def requires_active_research(report: PreflightReport) -> bool:
+    """Determine if preflight failure requires active re-search rather than pure text reformatting."""
+    if report.dead_urls:
+        return True
+    for issue in report.schema_issues:
+        issue_lower = issue.lower()
+        if (
+            "insufficient verified sources" in issue_lower
+            or "insufficient_verified_sources" in issue_lower
+            or "insufficient source count" in issue_lower
+            or "un-attempted" in issue_lower
+            or "dead citation" in issue_lower
+        ):
+            return True
+    return False
+
+
+def build_repair_prompt(
+    base_prompt: str,
+    current_deliverable: str,
+    feedback: str,
+    requires_research: bool = False,
+) -> str:
     """Construct the follow-up prompt for the worker to revise its deliverable."""
+    research_banner = ""
+    if requires_research:
+        research_banner = (
+            "================================================================================\n"
+            "MANDATORY ACTIVE RE-SEARCH REQUIRED:\n"
+            "Do NOT attempt to solve this deficit by reformatting existing text or relying on internal memory.\n"
+            "You MUST invoke your retrieval tools (web_search, web_fetch, browser_extract) to locate\n"
+            "and verify NEW, live independent sources before writing the final deliverable.\n"
+            "================================================================================\n\n"
+        )
     return (
+        f"{research_banner}"
         f"{base_prompt}\n\n"
         f"---\n"
         f"### PREVIOUS DRAFT DELIVERABLE:\n"
@@ -514,3 +547,4 @@ def build_repair_prompt(base_prompt: str, current_deliverable: str, feedback: st
         f"---\n"
         f"{feedback}\n"
     )
+
