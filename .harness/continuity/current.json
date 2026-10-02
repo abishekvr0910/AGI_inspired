@@ -1,24 +1,24 @@
 {
   "schema_version": 2,
-  "brief_revision": 164,
-  "created_at": "2026-10-02T15:37:00.000000+00:00",
+  "brief_revision": 165,
+  "created_at": "2026-10-02T16:42:00.000000+00:00",
   "status": "completed",
   "repository": {
     "branch": "product/v1-completion-2026-09-15",
     "upstream": "origin/product/v1-completion-2026-09-15",
     "tree_clean": true,
     "changed_paths": [],
-    "based_on_head": "268930319c9729fe3fd997c8fb7e2fa2787dc161"
+    "based_on_head": "b00f4044293b290807af82e7c3b3ad21f9bc1710"
   },
   "task": {
-    "id": "GEMINI-PRODUCTION-HYGIENE-AND-AUDIT-2026-10-02",
-    "phase": "production_readiness_audit_and_hermes_attestation_complete",
+    "id": "DEEP-LOOP-RESEARCH-UPGRADE-2026-10-02",
+    "phase": "deep_loop_research_upgrade_and_egress_attestation_complete",
     "status": "completed",
-    "next_action": "Human operator reviews docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md and decides on Rule 28 push."
+    "next_action": "Review final release preflight scorecard and production readiness verdict."
   },
   "completed": [
-    "Comprehensive production readiness audit completed (score: 6.5/10) with canonical review dossier authored.",
-    "Hermes runtime attestation updated to 0.21.1 matching host installation; dependency integrity gate verified 7/7.",
+    "Deep-Loop Re-Search upgrade landed across preflight, native worker, execution seam, and task runner.",
+    "Signed egress boundary attestation token generated and verified, clearing worker_egress_boundary_attested preflight blocker.",
     "Full model-free gate passed 99/99 suites green (84 unit, 8 containment, 7 integration) exit 0."
   ],
   "locked_constraints": [
@@ -28,16 +28,16 @@
   ],
   "gate": {
     "status": "passed",
-    "detail": "99/99 suites (84 unit, 8 containment, 7 integration), exit 0; targeted 38/14/28/7 pass; ESTOP=True; zero live calls."
+    "detail": "99/99 suites (84 unit, 8 containment, 7 integration), exit 0; preflight 45/45, native worker 23/23; ESTOP=True; zero live calls."
   },
   "references": [
     {
       "path": "docs/CURRENT_STATE.md",
-      "sha256": "db4ccca22f5960e158b275abaa0ee7d4617ae88b1f99a5c2c79a500617120477"
+      "sha256": "b4d9399f8aa8389ed776c108ee3456869ac53cdec5d6c64fd721bac4461244a0"
     },
     {
       "path": "docs/ACTIVE_WORK.json",
-      "sha256": "b96074e4150c092c60c8bbb906af41b1f241907769daaf1a69e6d1930963cc05"
+      "sha256": "c89eb829444922f65c362a115015a98affec44e9f00d09744e156e092e76f247"
     },
     {
       "path": "docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md",
