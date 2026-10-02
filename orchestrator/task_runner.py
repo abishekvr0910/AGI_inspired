@@ -3,6 +3,7 @@
 This module owns run_task; batch_runner only composes and re-exports it.
 """
 import contextlib
+import json
 import re
 import hashlib
 import sqlite3
