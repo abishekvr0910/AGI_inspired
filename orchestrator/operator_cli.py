@@ -106,7 +106,9 @@ def _git_state() -> dict:
     code, out, _ = _git(["status", "--porcelain=v1", "--untracked-files=all"])
     lines = [ln[3:] for ln in out.splitlines() if ln.strip()] if code == 0 else []
     tree_clean = code == 0 and not lines
-    code, out, _ = _git(["rev-list", "--left-right", "--count", "origin/master...master"])
+    code, out, _ = _git(["rev-list", "--left-right", "--count", "@{upstream}...HEAD"])
+    if code != 0:
+        code, out, _ = _git(["rev-list", "--left-right", "--count", "origin/master...master"])
     if code == 0:
         try:
             behind_s, ahead_s = out.split()

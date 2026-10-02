@@ -1,85 +1,90 @@
 {
   "schema_version": 2,
-  "brief_revision": 151,
-  "created_at": "2026-09-22T06:30:00.000000+00:00",
+  "brief_revision": 163,
+  "created_at": "2026-10-02T15:15:00.000000+00:00",
   "status": "completed",
   "repository": {
     "branch": "product/v1-completion-2026-09-15",
     "upstream": "origin/product/v1-completion-2026-09-15",
-    "tree_clean": true,
-    "changed_paths": [],
-    "based_on_head": "523caa3bb923493c43bed8abec46619b6ba56159"
+    "tree_clean": false,
+    "changed_paths": [
+      ".harness/continuity/current.json",
+      "docs/ACTIVE_WORK.json",
+      "docs/CURRENT_STATE.md",
+      "orchestrator/operator_cli.py",
+      "orchestrator/secrets.py",
+      "scripts/hermes_runtime_attestation.json",
+      "tests/test_secrets.py",
+      "tests/tiers.json",
+      "docs/CODEX_HANDOFF_2026-09-26_TYPESAFE_AI_AND_INVESTMENT.md",
+      "docs/CODEX_HANDOFF_TYPESAFE_JEV_TRANSPORT_2026-09-30.md",
+      "docs/GEMINI_TASK_TYPESAFE_DESIGN_PARTNER_AND_INTEGRATION_2026-09-26.md",
+      "docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md",
+      "docs/reviews/GEMINI_REVIEW_TYPESAFE_AI_SYNERGY_AND_INVESTMENT_2026-09-26.md",
+      "docs/reviews/GEMINI_REVIEW_TYPESAFE_DESIGN_PARTNER_AND_INTEGRATION_2026-09-27.md",
+      "orchestrator/typed_decisions.py",
+      "scripts/evaluate_leads_typesafe.py",
+      "tests/test_typed_decisions.py",
+      "tests/test_typesafe_evaluator.py"
+    ],
+    "based_on_head": "3de1dac2dcaf85cab6f2f9a089df5df721380e31"
   },
   "task": {
-    "id": "CODEX-CLAIMS-RESOLUTION-2026-09-22",
-    "phase": "codex_claims_resolved",
+    "id": "GEMINI-PRODUCTION-HYGIENE-AND-AUDIT-2026-10-02",
+    "phase": "production_readiness_audit_and_hermes_attestation_complete",
     "status": "completed",
-    "next_action": "All 6 Codex claims resolved: Evidence Gate, Forbidden Claims, Skills Gate, CDP Browser, Regression Tests, Verified Client. 97/97 suites green (unit 82, containment 8, integration 7). Rev 150's '119/119' was a pytest-count claim recorded while gate was invalid (fixed by tier manifest registration). ESTOP engaged."
+    "next_action": "Operator reviews docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md and decides on Rule 28 batch commit and push."
   },
   "completed": [
-    "Commercial Evidence Gate: sample/unverified/verified separation, export blocking, 8 prospects relabeled SAMPLE",
-    "Campaign Builder: forbidden claims filtered, 15 headlines, SAMPLE_ prefix on unverified CSV",
-    "Native Skills Gate: loads only operator-approved from skills_analyst/<mission>/, not _candidates/",
-    "Native CDP Browser: genuine WebSocket+CDP DOM extraction, HTTP fallback only on failure",
-    "Tier manifest registration: test_campaign_builder_regression added to unit tier",
-    "Regression Tests: 97/97 suites green (unit 82, containment 8, integration 7) — rev 150's '119/119' was pytest count, not suite count",
-    "Verified Client Added: el-shaddai-coffee-katowice with real evidence, dossier + CSV generated"
+    "Comprehensive production readiness audit completed (score: 6.5/10) with canonical review dossier authored.",
+    "Hermes runtime attestation updated to 0.21.1 matching host installation; dependency integrity gate verified 7/7.",
+    "Full model-free gate passed 99/99 suites green (84 unit, 8 containment, 7 integration) exit 0."
   ],
   "locked_constraints": [
-    "ESTOP engaged; zero live execution active",
-    "Do NOT push to origin without operator instruction (Rule 28)",
-    "Branch NOT merged to main",
-    "Zero-spend path strictly enforced",
-    "MAX_REPAIR_ATTEMPTS stays 2"
+    "ESTOP engaged; no live call absent an explicitly authorized human window.",
+    "No credential write, egress policy/signature change, outreach, or unapproved data export.",
+    "No push without operator instruction (Rule 28); TypeSafe host remains unallowlisted."
   ],
   "gate": {
     "status": "passed",
-    "detail": "97/97 suites green (tiers: unit 82, containment 8, integration 7), exit 0, zero FAIL lines. Attestation Ed25519-verified. ESTOP True, 0 zombies."
+    "detail": "99/99 suites (84 unit, 8 containment, 7 integration), exit 0; targeted 38/14/28/7 pass; ESTOP=True; zero live calls."
   },
   "references": [
     {
-      "path": "orchestrator/integrity.py",
-      "sha256": "9a932fc542326bb0c8537ff1e3a6cc102b5e7b59f01b7a4f19171cd4a8b25ef3"
-    },
-    {
-      "path": "orchestrator/task_runner.py",
-      "sha256": "156d9d020f425163afb807e9e6e0d7c013204fd32e6e671b27ad89be7b77931b"
-    },
-    {
-      "path": "orchestrator/distribution.py",
-      "sha256": "3189476d44ec28ff13b35e9c6de301e8321cfe6c8c8c012adf41a4517938ea2c"
-    },
-    {
-      "path": "orchestrator/native_worker.py",
-      "sha256": "d0b1fd2c693ac8c95543f69eda836964661da4bb49a5ef2ef0d14bae7d9d9715"
-    },
-    {
-      "path": "orchestrator/client_reporter.py",
-      "sha256": "6ac2384d1920e98400e3281e45e706b422beaa2cc4821841bfa9cea107adb4fb"
-    },
-    {
-      "path": "orchestrator/execution.py",
-      "sha256": "f9a6c66f62ec90819f65534a4d5f1264591542a9f49d6eef155ddb4fb15a920f"
-    },
-    {
-      "path": "orchestrator/campaign_builder.py",
-      "sha256": "7f7473144707a84533c5c7a5fc7bc54acb49869bfb1f3343fe2a263200f52d55"
-    },
-    {
-      "path": "orchestrator/client_profile.py",
-      "sha256": "262786776c4f70b8b1e650887e88199adeec9fa26171b4fe2f2ae344eb8064c7"
-    },
-    {
-      "path": "orchestrator/attestation_chain.py",
-      "sha256": "7705b899af6574b2833b4abdb9976822836cb9abc0984981652aabb9d18e3efb"
-    },
-    {
-      "path": "tests/tiers.json",
-      "sha256": "0bbed5f998f26735c275af8dddc682e20498d7a8dd2871f25b2cbea4e7b0dc9e"
-    },
-    {
       "path": "docs/CURRENT_STATE.md",
-      "sha256": "52da71342d322c7dd8e95fad23aaf163509e78dc5bf31456b52331406b250428"
+      "sha256": "db4ccca22f5960e158b275abaa0ee7d4617ae88b1f99a5c2c79a500617120477"
+    },
+    {
+      "path": "docs/ACTIVE_WORK.json",
+      "sha256": "b96074e4150c092c60c8bbb906af41b1f241907769daaf1a69e6d1930963cc05"
+    },
+    {
+      "path": "docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md",
+      "sha256": "11ee0427b4e11c13256e258cef60c221c61b815fd164785897e63aaced271d11"
+    },
+    {
+      "path": "docs/CODEX_HANDOFF_TYPESAFE_JEV_TRANSPORT_2026-09-30.md",
+      "sha256": "8399ed48dd916759006bf514964b8ad46f843200c070d87a76bf29ca502ed630"
+    },
+    {
+      "path": "orchestrator/typed_decisions.py",
+      "sha256": "635a643de90b4f8b450066b2fbde82909777061b3fd912e6b2f0dbac9ea443b5"
+    },
+    {
+      "path": "orchestrator/secrets.py",
+      "sha256": "f5cd83006cdbf9871ab10d2a25f2787c21eeafa5be74d699fa9e29095587044f"
+    },
+    {
+      "path": "tests/test_typed_decisions.py",
+      "sha256": "2660205eab023ebf022dfcb13b8d6006c263276e5b5a96a9bda88c8f2399b924"
+    },
+    {
+      "path": "config/egress_policy.yaml",
+      "sha256": "91e34ba7c530998a8e5a404541865beb205c45696989b524252896d4fe3ac356"
+    },
+    {
+      "path": "scripts/hermes_runtime_attestation.json",
+      "sha256": "59c5b24ef762d6a425e2099274bdf96f5872ff8d112cb95021fb1a96512cfd0c"
     }
   ]
 }

@@ -24,6 +24,7 @@ _ENVIRONMENT_KEYS = {
     "byteplus_coding": "ARK_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
+    "typesafe": "TYPESAFE_API_KEY",
 }
 _SYSRAND = random.SystemRandom()
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,7 +45,9 @@ class FakeCredentialManager:
 
 original_backend = credential_vault._win32cred
 original_env = os.environ.get("ARK_API_KEY")
+original_typesafe_env = os.environ.get("TYPESAFE_API_KEY")
 original_home = os.environ.get("HERMES_HOME")
+original_dotenv_reader = operator_cli.dotenv_values
 original_vault_getter = provider_chat.credential_vault.get_api_key
 original_cli_getter = operator_cli.credential_vault.get_api_key
 try:
@@ -63,6 +64,9 @@ try:
     check("stable BytePlus Credential Manager target",
           credential_vault.credential_target("byteplus_coding"),
           "AGI_like/byteplus_coding")
+    check("stable TypeSafe Credential Manager target",
+          credential_vault.credential_target("typesafe"),
+          "AGI_like/typesafe")
     check("unknown provider has no credential target",
           credential_vault.credential_target("unknown"), None)
 
@@ -92,6 +96,20 @@ try:
     check("missing vault and environment fail closed",
           credential_vault.get_api_key("byteplus_coding"), None)
 
+    os.environ["TYPESAFE_API_KEY"] = "typesafe-environment-fallback"
+    backend = FakeCredentialManager({"CredentialBlob": "typesafe-vault-key"})
+    credential_vault._win32cred = backend
+    check("TypeSafe Credential Manager takes precedence",
+          credential_vault.get_api_key("typesafe"), "typesafe-vault-key")
+    check("TypeSafe lookup uses exact generic target", backend.calls,
+          [("AGI_like/typesafe", backend.CRED_TYPE_GENERIC, 0)])
+    credential_vault._win32cred = FakeCredentialManager(error=RuntimeError("unreadable"))
+    check("TypeSafe read-only environment fallback works",
+          credential_vault.get_api_key("typesafe"), "typesafe-environment-fallback")
+    os.environ.pop("TYPESAFE_API_KEY", None)
+    check("TypeSafe missing vault and environment fail closed",
+          credential_vault.get_api_key("typesafe"), None)
+
     provider_chat.credential_vault.get_api_key = lambda provider: "vault-dispatch"
     check("provider transport checks vault before dotenv",
           provider_chat._secure_env_value("ARK_API_KEY"), "vault-dispatch")
@@ -106,15 +124,11 @@ try:
     check("preflight never includes credential value", "vault-presence-only" in credential_check["detail"], False)
 
     operator_cli.credential_vault.get_api_key = lambda provider: None
-    with tempfile.TemporaryDirectory(dir=ROOT / "workspace") as td:
-        hermes_home = Path(td)
-        (hermes_home / "config.yaml").write_text("{}\n", encoding="utf-8")
-        (hermes_home / ".env").write_text("ARK_API_KEY=private-dotenv-only\n",
-                                          encoding="utf-8")
-        os.environ["HERMES_HOME"] = str(hermes_home)
-        os.environ.pop("ARK_API_KEY", None)
-        credential_check = next(item for item in operator_cli._canary_prerequisites()
-                                if item["check"] == "ark_api_key_present_in_env")
+    os.environ["HERMES_HOME"] = str(ROOT / ".tmp" / "virtual-hermes-home")
+    operator_cli.dotenv_values = lambda _path: {"ARK_API_KEY": "private-dotenv-only"}
+    os.environ.pop("ARK_API_KEY", None)
+    credential_check = next(item for item in operator_cli._canary_prerequisites()
+                            if item["check"] == "ark_api_key_present_in_env")
     check("preflight accepts Hermes private dotenv presence", credential_check["ok"], True)
     check("preflight detail still withholds dotenv secret value",
           "private-dotenv-only" in credential_check["detail"], False)
@@ -127,6 +141,7 @@ finally:
     credential_vault._win32cred = original_backend
     provider_chat.credential_vault.get_api_key = original_vault_getter
     operator_cli.credential_vault.get_api_key = original_cli_getter
+    operator_cli.dotenv_values = original_dotenv_reader
     if original_home is None:
         os.environ.pop("HERMES_HOME", None)
     else:
@@ -135,5 +150,9 @@ finally:
         os.environ.pop("ARK_API_KEY", None)
     else:
         os.environ["ARK_API_KEY"] = original_env
+    if original_typesafe_env is None:
+        os.environ.pop("TYPESAFE_API_KEY", None)
+    else:
+        os.environ["TYPESAFE_API_KEY"] = original_typesafe_env
 
 print(f"Credential vault: {checks}/{checks} assertions passed")

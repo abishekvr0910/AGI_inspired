@@ -1,9 +1,7 @@
 {
   "schema_version": 1,
   "command": "hermes",
-  "version": "0.20.2",
-  "source_revision": "0e8b5893eaa8075872810dc3516dbef504a3089b",
-  "allowed_dirty_files": {
-    "contributors/emails/agent@agents-Mac-mini.local": "sha256:718e19c1b92f69217b8d886085c029b72ecbda93992dfc7998b2ab6b038b7f90"
-  }
+  "version": "0.21.1",
+  "source_revision": "267a6b79c8e0d8e0456d27948a80b79fea8f63d2",
+  "allowed_dirty_files": {}
 }
