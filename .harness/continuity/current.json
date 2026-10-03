@@ -8,7 +8,7 @@
     "upstream": "origin/master",
     "tree_clean": true,
     "changed_paths": [],
-    "based_on_head": "e8c8d511f0b33f727eafb4e6191c676097b80cba"
+    "based_on_head": "6d7cf02b759212a9a768e1f7a198efba13819d8d"
   },
   "task": {
     "id": "RELEASE-TO-MASTER-AND-PRODUCTION-READINESS-2026-10-03",
@@ -33,31 +33,31 @@
   "references": [
     {
       "path": "docs/CURRENT_STATE.md",
-      "sha256": "b4d9399f8aa8389ed776c108ee3456869ac53cdec5d6c64fd721bac4461244a0"
+      "sha256": "920a22206f478815d5b378124ea45be624fd7922e39a2cbe03873997ff285dc6"
     },
     {
       "path": "docs/ACTIVE_WORK.json",
-      "sha256": "c89eb829444922f65c362a115015a98affec44e9f00d09744e156e092e76f247"
+      "sha256": "3f01084e5cb5d34a968840316008f5f765b37c2d4472bbe50be87de730ad5b1f"
     },
     {
       "path": "docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md",
-      "sha256": "11ee0427b4e11c13256e258cef60c221c61b815fd164785897e63aaced271d11"
+      "sha256": "db905cb71a366ecea1a272b024e798e49abf501dd504dd04f3bd213bcfc5a517"
     },
     {
       "path": "docs/CODEX_HANDOFF_TYPESAFE_JEV_TRANSPORT_2026-09-30.md",
-      "sha256": "8399ed48dd916759006bf514964b8ad46f843200c070d87a76bf29ca502ed630"
+      "sha256": "0521c8898ccbfde6b429e5453f06d551c2a82c4d33d24a85069d3faced7e109d"
     },
     {
       "path": "orchestrator/typed_decisions.py",
-      "sha256": "635a643de90b4f8b450066b2fbde82909777061b3fd912e6b2f0dbac9ea443b5"
+      "sha256": "d7040059a8599a47907ef8f5c4ff4c55e407e33d2d33aca3c30935590196fbe5"
     },
     {
       "path": "orchestrator/secrets.py",
-      "sha256": "f5cd83006cdbf9871ab10d2a25f2787c21eeafa5be74d699fa9e29095587044f"
+      "sha256": "eb7781ec94011fdfab837f9aa71faaecaf0eb9d03f66e7511a58b2160ff7329a"
     },
     {
       "path": "tests/test_typed_decisions.py",
-      "sha256": "2660205eab023ebf022dfcb13b8d6006c263276e5b5a96a9bda88c8f2399b924"
+      "sha256": "7c66753027982536e41b23663a4f14b9c10be29e6c94d03f85536b4ddade0f19"
     },
     {
       "path": "config/egress_policy.yaml",
@@ -65,7 +65,7 @@
     },
     {
       "path": "scripts/hermes_runtime_attestation.json",
-      "sha256": "59c5b24ef762d6a425e2099274bdf96f5872ff8d112cb95021fb1a96512cfd0c"
+      "sha256": "019bd54bb2ffa7a28d1e77041500b4dd5bc43fa59bc5f44affb8c47201685ffe"
     }
   ]
 }
