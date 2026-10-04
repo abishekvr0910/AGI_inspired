@@ -55,7 +55,7 @@ Key reasons for this sequence:
 
 | ID | Suggested implementer | Dependency | Deliverable | Status |
 | --- | --- | --- | --- | --- |
-| P0-A | Gemini | None | Honest sample inventory, safe cleanup, truthful generator | PENDING |
+| P0-A | Gemini | None | Honest sample inventory, safe cleanup, truthful generator | COMPLETED |
 | P0-B | Gemini | P0-A | Evidence-bound, complete client exports | PENDING |
 | P1-C | Codex or another forward engineer | None; isolated from A/B | Real browser and bounded research path verification | PENDING |
 | P1-D | Gemini or UI engineer | P0-B; P1-C before integration | Actual browser console acceptance | PENDING |
@@ -63,7 +63,7 @@ Key reasons for this sequence:
 | P1-F | Forward engineer + operator | A-E reviewed; data and live authority | One client pilot with reviewed outputs | PENDING |
 | P1-G | Independent reviewer + deployment engineer | Read-only review can start now | Release and deployment evidence | PENDING |
 
-Start P0-A now. P1-C can proceed in an isolated worktree while A/B proceed.
+Start P0-B next. P1-C can proceed in an isolated worktree while A/B proceed.
 P1-E can proceed independently only if its path ownership does not overlap C.
 Do not start additional frameworks, subagent fleets, dashboard redesigns, or
 partner integrations until the accepted workflow exposes a concrete need.
@@ -102,6 +102,16 @@ Acceptance:
 Verification: new fixture tests for this flow plus
 `python -B tests/run_all.py test_client_reporter test_campaign_builder_regression`,
 then the complete gate. Reviewer checks the local artifact manifest as well as code.
+
+**Status: COMPLETED (2026-10-04)**
+- Backup created: `workspace/backups/samples_pre_remediation_20261004/sample_manifest_20261004.json` (81 files backed up with SHA256 checksums).
+- All 8 known sample prospects remediated in `workspace/PROSPECT_TRACKER.csv` (`SAMPLE_NOT_FOR_SEND` status, `[SAMPLE]` waste estimate, clear demo note).
+- Google Ads Editor import CSVs sanitized to clean headers and `Status: Paused`.
+- Outbound pitches in `workspace/outbound_pitches/` prepended with non-outreach demo banners and deceptive query assertions neutralized.
+- `scripts/generate_prospect_pipeline.py` defaults to `sample_mode=True`, checks compiler `success`, handles `EXPORT_BLOCKED`, and marks sample outputs safely.
+- Dedicated script: `scripts/remediate_sample_artifacts.py` supporting dry-run, backup, restore, and idempotent execution. Real client `el-shaddai-coffee-katowice` strictly preserved.
+- Test suite: `tests/test_sample_remediation.py` (10/10 PASS) registered in `tests/tiers.json`.
+- Full test gate: 102/102 test suites PASS, exit 0. ESTOP strictly engaged.
 
 ## 5. P0-B: Evidence and Complete Client Packages
 

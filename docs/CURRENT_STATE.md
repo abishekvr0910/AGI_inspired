@@ -22,11 +22,16 @@ Eight samples still have Ready to Send tracker entries and misleading stored
 artifacts. The sole record marked verified has incomplete research and generic
 service-business ad copy for a coffee client. See the review for exact evidence.
 
-Next action: claim P0-A (truthful sample generation and safe artifact remediation).
-P0-B then binds exports to complete, approved evidence. P1-C through P1-G cover
-browser/research proof, console acceptance, measurement, a consented pilot, and
-independent release/deployment evidence. All implementation packages are PENDING;
-suggested agent names in the plan are not active ownership claims.
+Next action: claim P0-B (bind client-ready exports to complete, approved evidence).
+P0-A (truthful sample generation and safe artifact remediation) is COMPLETED:
+all 8 known synthetic samples backed up in `workspace/backups/samples_pre_remediation_20261004/`,
+`PROSPECT_TRACKER.csv` updated with `SAMPLE_NOT_FOR_SEND` status and `[SAMPLE]` waste labels,
+Google Ads Editor CSVs paused, deceptive pitch assertions neutralized,
+`scripts/generate_prospect_pipeline.py` gated on compiler success,
+and `tests/test_sample_remediation.py` registered and passing (10/10).
+Test gate is 102/102 suites green (exit 0). P1-C through P1-G cover browser/research
+proof, console acceptance, measurement, a consented pilot, and independent release/deployment
+evidence. All other implementation packages remain PENDING.
 No new live window, credential write, policy widening, outreach, ad publication,
 or push is authorized by this plan. Historical implementation notes follow.
 

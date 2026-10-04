@@ -258,10 +258,12 @@ def generate_executive_dossier(
     if is_sample:
         sample_banner = "\n> **⚠ SAMPLE MATERIAL — NOT VERIFIED FOR CLIENT USE**\n> This package was generated from synthetic/demonstration data. All contacts, waste estimates, and claims are UNVERIFIED.\n"
 
+    report_tag = "> **[SAMPLE DEMONSTRATION MATERIAL]** | Compiled via AGI_like Distribution Engine" if is_sample else "> **Confidential Client Report** | Compiled Deterministically via AGI_like Distribution Engine"
+
     lines: list[str] = [
         f"# Executive Strategy & Distribution Audit: {display_name}",
         "",
-        "> **Confidential Client Report** | Compiled Deterministically via AGI_like Distribution Engine",
+        report_tag,
         f"> **Primary Domain:** {domain} | **Market/Geo:** {geos} | **Target URL:** [{landing_url}]({landing_url})",
         sample_banner,
         "---",

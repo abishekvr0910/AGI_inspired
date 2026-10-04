@@ -1,46 +1,40 @@
 {
   "schema_version": 2,
-  "brief_revision": 175,
-  "created_at": "2026-10-04T13:33:10.320329+00:00",
+  "brief_revision": 177,
+  "created_at": "2026-10-04T14:07:54.181259+00:00",
   "status": "completed",
   "repository": {
     "branch": "master",
     "upstream": "origin/master",
-    "tree_clean": false,
-    "changed_paths": [
-      ".harness/continuity/current.json",
-      "docs/ACTIVE_WORK.json",
-      "docs/CURRENT_STATE.md",
-      "docs/README.md",
-      "docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md",
-      "docs/reviews/CODEX_PRODUCT_REVIEW_2026-10-04.md"
-    ],
-    "based_on_head": "e193b8cdb87607f32dbad262f0e63f1f0146c128"
+    "tree_clean": true,
+    "changed_paths": [],
+    "based_on_head": "45d86fbf2c56478f4b227bfac009d96c02751244"
   },
   "task": {
-    "id": "PRODUCT-COMPLETION-PLAN-2026-10-04",
-    "phase": "documentation_handoff",
+    "id": "PRODUCT-P0-A-2026-10-04",
+    "phase": "sample_remediation_and_generator_hardening",
     "status": "completed",
-    "next_action": "Claim PRODUCT-P0-A-2026-10-04 from docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md. All implementation packages remain pending."
+    "next_action": "Claim PRODUCT-P0-B-2026-10-04 from docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md."
   },
   "completed": [
-    "Recorded measured product review; added ordered P0-A through P1-G scopes, acceptance criteria, dependencies and agent prompts.",
-    "Updated active state and docs index; released ownership. Documentation is uncommitted; no implementation agents launched."
+    "Remediated 8 known synthetic sample prospects: backed up in workspace/backups/samples_pre_remediation_20261004/ with sha256 checksums.",
+    "PROSPECT_TRACKER.csv relabeled to SAMPLE_NOT_FOR_SEND; Google Ads CSVs set to Paused; pitches sanitized with demo banners; generate_prospect_pipeline.py gated on compiler success.",
+    "Added scripts/remediate_sample_artifacts.py and tests/test_sample_remediation.py (10/10 PASS). Full gate 102/102 test suites green."
   ],
   "locked_constraints": [
     "ESTOP engaged; no live provider calls or cohort without an explicit operator window.",
     "No credential provisioning, policy widening, outreach, publication, ad spend or push.",
     "Preserve runtime artifacts; no guessed costs, fabricated evidence or changed historical verdicts.",
-    "Claim path ownership before implementation; serialize shared integration files."
+    "Preserve real client data untouched (el-shaddai-coffee-katowice)."
   ],
   "gate": {
     "status": "passed",
-    "detail": "101/101 suites independently passed at 7d07d78, exit 0. e193b8c and this handoff change docs only; full gate not repeated. No live calls."
+    "detail": "102/102 suites passed (unit 87, containment 8, integration 7), exit 0. No live calls. ESTOP strictly engaged."
   },
   "references": [
     {
       "path": "docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md",
-      "sha256": "c8b340ceb6b93040e949280a02656abeea36240e7c4822631e190348f0a8d851"
+      "sha256": "79430bb5050acd6416275fa7dbbeac58c748f2756db0d70b6394e583bb936467"
     },
     {
       "path": "docs/reviews/CODEX_PRODUCT_REVIEW_2026-10-04.md",
@@ -48,23 +42,23 @@
     },
     {
       "path": "docs/CURRENT_STATE.md",
-      "sha256": "2f545c940a2d89cd4ede1855d4eccd838f583af378253243b3a4d11c81850bfb"
+      "sha256": "14f9cfd283245e22d24f013f673e642ae9a0a59c58acaa38dc32678cc380b676"
     },
     {
       "path": "docs/ACTIVE_WORK.json",
-      "sha256": "73224a9cd775d722b5a73c1e9d1901edc63cdd6f549d78fddbddac0385555899"
+      "sha256": "1e7453cfb1d5360879f0f7e86effae7c22b5b51d06ba6119f9cad38da6975a4d"
     },
     {
       "path": "docs/README.md",
       "sha256": "296cd4463ad49d01627b392bf1e957e5e14bc5d2a1498b10798be6e4146712bf"
     },
     {
-      "path": "docs/CANONICAL_ARCHITECTURE.md",
-      "sha256": "0a510c19665922d792183d137e80a475ef2469ac3b29df9d1495cdcbaa0b7eca"
+      "path": "scripts/remediate_sample_artifacts.py",
+      "sha256": "cd3228f586de7835cb4ae3c26f154cc9a1a3778512f2ebc1b57ddc51afe083b3"
     },
     {
-      "path": "config/egress_policy.yaml",
-      "sha256": "91e34ba7c530998a8e5a404541865beb205c45696989b524252896d4fe3ac356"
+      "path": "tests/test_sample_remediation.py",
+      "sha256": "2d75e99959bd9ae6ebb0b2cd315079625ebad4be23b664038614ea0932801f45"
     }
   ]
 }

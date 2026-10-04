@@ -156,9 +156,10 @@ TARGET_PROSPECTS = [
 ]
 
 
-def generate_pipeline():
+def generate_pipeline(sample_mode: bool = True):
     print("=" * 70)
-    print("GENERATING OUTBOUND PROSPECT PIPELINE & COMPILED AUDIT PACKAGES")
+    label = "SAMPLE DEMONSTRATION PIPELINE (NOT FOR OUTREACH)" if sample_mode else "PRODUCTION PROSPECT PIPELINE"
+    print(f"GENERATING {label}")
     print("=" * 70)
 
     tracker_csv_path = ROOT / "workspace" / "PROSPECT_TRACKER.csv"
@@ -220,17 +221,84 @@ def generate_pipeline():
         (cdir / "audience_pain_point_research.md").write_text(pain_doc, encoding="utf-8")
 
         # 3. Compile full package using upgraded campaign builder
-        res = client_reporter.compile_and_export_client_package(cid, root=ROOT)
-        print(f"[+] Compiled Audit Package for {p['company_name']} ({p['city']})")
+        # Check compiler result; fail closed on EvidenceGate refusal
+        res = client_reporter.compile_and_export_client_package(cid, root=ROOT, force_export=sample_mode)
+        
+        if not res.get("success"):
+            reason = res.get("message") or res.get("error") or "Unknown compiler refusal"
+            print(f"[-] Export BLOCKED for {p['company_name']} ({p['city']}): {reason}")
+            tracker_rows.append([
+                p["company_name"],
+                p["vertical"],
+                p["city"],
+                p["contact_name"],
+                p["contact_role"],
+                p["contact_email"],
+                p["phone"],
+                p["website"],
+                f"[UNVERIFIED] {p['est_monthly_leak']}",
+                "",
+                "",
+                "",
+                "EXPORT_BLOCKED",
+                "",
+                "",
+                f"Export blocked by evidence gate: {reason}",
+            ])
+            continue
+
+        print(f"[+] Compiled {'Sample Demonstration' if sample_mode else 'Production'} Package for {p['company_name']} ({p['city']})")
+
+        # In sample mode, ensure Google Ads Editor import rows are strictly Paused and prefixed
+        if sample_mode:
+            csv_path = cdir / "google_ads_editor_import.csv"
+            if csv_path.exists():
+                lines = csv_path.read_text(encoding="utf-8").splitlines()
+                reader = list(csv.reader(lines))
+                if reader:
+                    hdr = reader[0]
+                    status_idx = hdr.index("Status") if "Status" in hdr else -1
+                    camp_idx = hdr.index("Campaign") if "Campaign" in hdr else 0
+                    modified_rows = []
+                    for r in reader[1:]:
+                        if status_idx >= 0 and len(r) > status_idx:
+                            r[status_idx] = "Paused"
+                        if camp_idx >= 0 and len(r) > camp_idx and not r[camp_idx].startswith("[SAMPLE] "):
+                            r[camp_idx] = f"[SAMPLE] {r[camp_idx]}"
+                        modified_rows.append(r)
+                    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                        w = csv.writer(f)
+                        w.writerow(hdr)
+                        w.writerows(modified_rows)
 
         # 4. Generate Personalized Outreach Pitch Email
-        email_body = f"""================================================================================
+        sample_banner = ""
+        if sample_mode:
+            sample_banner = """================================================================================
+[SAMPLE / DEMONSTRATION MATERIAL ONLY - NOT FOR OUTREACH]
+This pitch was generated from synthetic sample data. No real search audit or
+query leak analysis was performed on this domain.
+DO NOT SEND TO RECIPIENT.
+================================================================================
+"""
+        scenario_claim = (
+            f"[SAMPLE SCENARIO] In an audit scenario, search ads without negative shields routinely match to queries like:"
+            if sample_mode else
+            f"We ran an automated query analysis on your local market footprint and noticed search ads routinely matching to queries like:"
+        )
+        savings_claim = (
+            f"in production this is designed to address unconvertible clicks."
+            if sample_mode else
+            f"it should instantly eliminate an estimated {p['est_monthly_leak']} in unconvertible clicks."
+        )
+
+        email_body = f"""{sample_banner}================================================================================
 PROSPECT: {p['company_name']} ({p['city']})
 TO: {p['contact_name']} <{p['contact_email']}>
 PHONE: {p['phone']}
 AUDIT ATTACHMENT: workspace/clients/{cid}/strategy_dossier.html (Print to PDF)
 CSV ATTACHMENT: workspace/clients/{cid}/google_ads_editor_import.csv
-ESTIMATED AD WASTE DETECTED: {p['est_monthly_leak']}
+ESTIMATED AD WASTE DETECTED: {'[SAMPLE ESTIMATE] ' if sample_mode else ''}{p['est_monthly_leak']}
 ================================================================================
 SUBJECT: {p['city']} Search Waste Audit for {p['company_name']} (~{p['est_monthly_leak']} in negative match leaks)
 
@@ -240,17 +308,17 @@ I came across {p['company_name']}'s Google Search presence for {p['vertical']} a
 
 In high-ticket {p['vertical']}, clicks typically range from $40 to $75+ each. When search matching isn't shielded, 20% to 35% of ad spend quietly drains on zero-intent searches.
 
-We ran an automated query analysis on your local market footprint and noticed search ads routinely matching to queries like:
+{scenario_claim}
 - "{p['top_waste_queries'][0]}"
 - "{p['top_waste_queries'][1]}"
 - "{p['top_waste_queries'][2]}"
 
-We compiled an objective 1-page Strategy Audit & Negative Shield Dossier for {p['company_name']}, plus a pre-built Google Ads Editor Bulk CSV file with Single-Theme Ad Groups and negative shields to plug these leaks immediately:
+We compiled a {'sample 1-page Strategy Demonstration Dossier' if sample_mode else 'objective 1-page Strategy Audit & Negative Shield Dossier'} for {p['company_name']}, plus a pre-built Google Ads Editor Bulk CSV file with Single-Theme Ad Groups and negative shields to plug these leaks immediately:
 
 📁 Attached: {cid}_Search_Audit.pdf
 📁 Attached: google_ads_editor_import.csv (1-click import into Google Ads Editor)
 
-Feel free to hand this directly to your in-house marketing manager or agency to implement right away—it should instantly eliminate an estimated {p['est_monthly_leak']} in unconvertible clicks.
+Feel free to hand this directly to your in-house marketing manager or agency to implement right away—{savings_claim}
 
 Would you be open to a 10-minute call this Thursday to review your search terms and see if there are other high-intent gaps we can capture?
 
@@ -264,6 +332,10 @@ Performance Search Specialist
         pitch_file = pitches_dir / f"{cid}_pitch.txt"
         pitch_file.write_text(email_body, encoding="utf-8")
 
+        outreach_status = "SAMPLE_NOT_FOR_SEND" if sample_mode else "Ready to Send"
+        waste_recorded = f"[SAMPLE] {p['est_monthly_leak']}" if sample_mode else p['est_monthly_leak']
+        note = "Synthetic sample demonstration material - DO NOT SEND" if sample_mode else ""
+
         tracker_rows.append([
             p["company_name"],
             p["vertical"],
@@ -273,14 +345,14 @@ Performance Search Specialist
             p["contact_email"],
             p["phone"],
             p["website"],
-            p["est_monthly_leak"],
+            waste_recorded,
             f"workspace/clients/{cid}/strategy_dossier.html",
             f"workspace/clients/{cid}/google_ads_editor_import.csv",
             f"workspace/outbound_pitches/{cid}_pitch.txt",
-            "Ready to Send",
+            outreach_status,
             "",
             "",
-            "",
+            note,
         ])
 
     # 5. Write to PROSPECT_TRACKER.csv
@@ -296,11 +368,17 @@ Performance Search Specialist
         writer.writerows(tracker_rows)
 
     print("\n" + "=" * 70)
-    print(f"PIPELINE GENERATION COMPLETE: {len(TARGET_PROSPECTS)} PROSPECTS ARMED & COMPILED!")
+    label = "SAMPLE PIPELINE COMPILED (DEMO ONLY - NOT FOR OUTREACH)" if sample_mode else "PRODUCTION PIPELINE COMPILED"
+    print(f"{label}: {len(TARGET_PROSPECTS)} PROSPECTS PROCESSED")
     print(f"  * Pipeline Tracker: {tracker_csv_path}")
     print(f"  * Pitch Emails:     {pitches_dir}")
     print("=" * 70 + "\n")
 
 
 if __name__ == "__main__":
-    generate_pipeline()
+    import argparse
+    parser = argparse.ArgumentParser(description="Generate prospect pipeline audits and pitches.")
+    parser.add_argument("--production", action="store_true", help="Run in production mode (requires EvidenceGate verification).")
+    args = parser.parse_args()
+    generate_pipeline(sample_mode=not args.production)
+
