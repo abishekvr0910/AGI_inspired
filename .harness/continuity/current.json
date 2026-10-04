@@ -1,25 +1,25 @@
 {
   "schema_version": 2,
-  "brief_revision": 167,
-  "created_at": "2026-10-03T11:21:00.000000+00:00",
+  "brief_revision": 168,
+  "created_at": "2026-10-04T05:19:00.000000+00:00",
   "status": "completed",
   "repository": {
     "branch": "master",
     "upstream": "origin/master",
     "tree_clean": true,
     "changed_paths": [],
-    "based_on_head": "6d7cf02b759212a9a768e1f7a198efba13819d8d"
+    "based_on_head": "dafa4a547b8533ab134cb67f0154271f8fcffbc6"
   },
   "task": {
-    "id": "RELEASE-TO-MASTER-AND-PRODUCTION-READINESS-2026-10-03",
-    "phase": "master_branch_merge_and_push_complete",
+    "id": "DEEP-LOOP-RESEARCH-AUTONOMY-AND-EGRESS-PIVOT-2026-10-04",
+    "phase": "deep_loop_research_autonomy_and_egress_harvesting_complete",
     "status": "completed",
-    "next_action": "Run release preflight audit on master and review remaining production gates."
+    "next_action": "Proceed to Bleeding Point 3 (Linux & Cloud-Native Portability) or Bleeding Point 4 (Web Console Campaign Generation & Live Interactive Diffs)."
   },
   "completed": [
-    "Fast-forward merged product/v1-completion-2026-09-15 into master release branch (40 commits).",
-    "Empirical hypothesis H-DEEP-LOOP-01 fully verified across all 4 sub-hypotheses (H1, H2, H3, H4).",
-    "Full model-free test gate passed 100/100 suites green (85 unit, 8 containment, 7 integration) exit 0."
+    "Landed Fix 2: Deep-Loop Research Autonomy with anti-bot challenge detection, pivot guidance, and multi-turn verified evidence gating.",
+    "Landed Fix 1: Egress Allowlist Candidate Harvesting during runs, pre-screened batch approvals in policy_manager and web console, and adaptive source pivoting.",
+    "Full model-free test gate passed 100/100 suites green (85 unit, 8 containment, 7 integration) exit 0; ESTOP strictly engaged."
   ],
   "locked_constraints": [
     "ESTOP engaged; no live call absent an explicitly authorized human window.",
@@ -28,16 +28,16 @@
   ],
   "gate": {
     "status": "passed",
-    "detail": "100/100 suites (85 unit, 8 containment, 7 integration), exit 0; hypothesis suite 3/3, preflight 45/45, native worker 23/23; ESTOP=True; zero live calls."
+    "detail": "100/100 suites (85 unit, 8 containment, 7 integration), exit 0; preflight 45/45, native worker 26/26, policy manager 58/58, web UI 3/3, hypothesis suite 3/3; ESTOP=True; zero live calls."
   },
   "references": [
     {
       "path": "docs/CURRENT_STATE.md",
-      "sha256": "920a22206f478815d5b378124ea45be624fd7922e39a2cbe03873997ff285dc6"
+      "sha256": "068367555fec772321a3291a871b45171933edb69be76a72b47cb164f5ba3778"
     },
     {
       "path": "docs/ACTIVE_WORK.json",
-      "sha256": "3f01084e5cb5d34a968840316008f5f765b37c2d4472bbe50be87de730ad5b1f"
+      "sha256": "5462dd2b9c6b14d435b7a634dfc949cadf0839548a6f61cb87e266117b2af035"
     },
     {
       "path": "docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md",
