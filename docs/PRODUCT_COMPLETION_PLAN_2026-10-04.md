@@ -60,8 +60,8 @@ Key reasons for this sequence:
 | P1-C | Codex or another forward engineer | None; isolated from A/B | Real browser and bounded research path verification | COMPLETED |
 | P1-D | Gemini or UI engineer | P0-B; P1-C before integration | Actual browser console acceptance | COMPLETED |
 | P1-E | Codex or data engineer | Coordinate runner edits with P1-C | Honest outcome and cost measurement | COMPLETED |
-| P1-F | Forward engineer + operator | A-E reviewed; data and live authority | One client pilot with reviewed outputs | PENDING |
-| P1-G | Independent reviewer + deployment engineer | Read-only review can start now | Release and deployment evidence | PENDING |
+| P1-F | Forward engineer + operator | A-E reviewed; data and live authority | One client pilot with reviewed outputs | PREPARED (MODEL-FREE) |
+| P1-G | Independent reviewer + deployment engineer | Read-only review can start now | Release and deployment evidence | AUDITED & PREFLIGHT EVALUATED |
 
 Start P1-F (Consented Client Pilot Preparation) or P1-G (Release and Deployment Evidence) next.
 P1-E can proceed independently only if its path ownership does not overlap.
@@ -297,7 +297,11 @@ outreach and publication require separate existing authorization.
 Expand to further fresh tasks only after reviewing that result. The design's
 70% completion, 90% spot-check accuracy, declining intervention over eight weeks,
 and $0.50/task are targets from `HARNESS_DESIGN.md`, not measurements established
-by this pilot. A pilot pass does not establish enterprise readiness or revenue.
+**Status: PREPARED (MODEL-FREE) (2026-10-04)**
+- Frozen Pilot Specification: Created `workspace/pilots/consented_pilot_spec_20261004.json` defining exact deliverables (dossier MD/HTML, Google Ads Editor CSV with Paused status, JSON schema), held-out research tasks (`keyword_research`, `negative_keyword_harvest`, `ad_copy_variants`, `competitive_serp`), budget cap ($1.00 USD, 100,000 tokens), and stop conditions (ESTOP, HTTP 429, budget, timeout).
+- Human Scoring Protocol: Created `workspace/pilots/PILOT_SCORING_SHEET_2026-10-04.md` defining boundary governance audit, claim-by-claim verification table, Polish language quality checks, character limit validation, and offline Google Ads Editor import checks.
+- CLI Dry-Run & Gating Verification: Verified model-free dry-run behavior via `python orchestrator/distribution.py --client el-shaddai-coffee-katowice --template all --dry-run` (exit 0) and hardened `orchestrator/distribution.py` to block unapproved client exports with `EXPORT_BLOCKED` while supporting explicit `--allow-draft` for marked internal drafts.
+- Live Execution Status: Live network/provider execution remains BLOCKED pending explicit operator window authorization with ESTOP strictly engaged.
 
 ## 10. P1-G: Independent Release and Deployment Evidence
 
@@ -323,6 +327,16 @@ someone else reviews any code written by the nominal reviewer.
 - Obtain independent final review before the operator's release/push decision.
   `safe_to_proceed=true` means the implemented preflight passed in that environment;
   it does not establish customer value, generalized accuracy or a security guarantee.
+
+**Status: AUDITED & PREFLIGHT EVALUATED (2026-10-04)**
+- Automated Release Preflight: Executed `python -B orchestrator/operator_cli.py preflight release --json`. Model-free test gate passed 100% green (`106/106 suites green`, tiers: unit, containment, integration).
+- Blocker Registry & Ownership:
+  1. `munder_process_quiescence` (`source=psutil offenders=1`): Transient local process. Owner: Operator.
+  2. `git_upstream_synchronized` (`ahead=9 behind=0`): Commits currently local awaiting review and operator push. Owner: Operator.
+  3. `worker_egress_boundary_attested` (`endpoint=127.0.0.1:8787 error=attestation_mismatch`): Broker running with prior ephemeral attestation; requires refresh before live dispatch. Owner: Platform Engineer.
+  4. `off_machine_audit_retention` (`error=audit_enforcement_not_enabled`): Remote immutable S3 bucket unconfigured in local development environment; documented as an explicit enterprise deployment dependency. Owner: Cloud Infrastructure Operator.
+- Threat Boundary Audit: Documented boundary distinctions between Windows Job Objects / Restricted Tokens, Native in-controller agent loop, loopback-only CDP transport (127.0.0.1), and provisional status of Linux support.
+- Credential Security: Operator key stored in Windows Credential Manager (Ed25519, fingerprint `27f41dc76ce76c2d`); BytePlus/OpenAI provider secrets verified in Credential Manager with zero plaintext secrets in repository or environment.
 
 ## 11. Completion Record and Copy-Paste Handoffs
 

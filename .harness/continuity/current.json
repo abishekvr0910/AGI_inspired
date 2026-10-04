@@ -1,26 +1,26 @@
 {
   "schema_version": 2,
-  "brief_revision": 181,
-  "created_at": "2026-10-04T16:45:00.000000+00:00",
+  "brief_revision": 182,
+  "created_at": "2026-10-04T17:10:00.000000+00:00",
   "status": "completed",
   "repository": {
     "branch": "master",
     "upstream": "origin/master",
     "tree_clean": true,
     "changed_paths": [],
-    "based_on_head": "3c55a3e1031b93a8bf7d4541604e07eca35bf8b4"
+    "based_on_head": "728daa8aa627369d2b73e74e525063ac53872a81"
   },
   "task": {
-    "id": "PRODUCT-P1-E-2026-10-04",
-    "phase": "honest_outcome_and_cost_measurement",
+    "id": "PRODUCT-P1-F-AND-G-2026-10-04",
+    "phase": "pilot_preparation_and_release_evidence",
     "status": "completed",
-    "next_action": "Claim PRODUCT-P1-F-2026-10-04 or P1-G from docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md."
+    "next_action": "Independent verification by Codex via docs/reviews/CODEX_VERIFICATION_BRIEF_2026-10-04.md and operator window authorization for consented pilot execution."
   },
   "completed": [
-    "Established explicit cost provenance in orchestrator/cost_accounting.py (MEASURED_INVOICE, ESTIMATED_TOKEN_RATE, LOCAL_COMPUTE, UNKNOWN), eliminating hardcoded cost_usd=0.0 in task_runner.py. Unknown costs never display or count as free ($0.00).",
-    "Audited 218 historical ledger rows: identified 139 token-bearing tasks previously masked as $0.00 (82 local compute, 15 cloud models totaling $1.0815 estimated spend, 121 unpriced).",
-    "Audited human verdict provenance, strictly separating 2 genuine operator reviews from 9 automated AI-performed checks. Enforced that AI checks are never reported as independent human accuracy.",
-    "Partitioned historical tasks into disjoint cohort manifests (canaries, infra_failures, historical_prototypes, commercial_distribution). Added tests/test_cost_accounting.py (7/7 PASS) registered in tests/tiers.json; full gate 106/106 suites green (unit 89, containment 8, integration 9), exit 0. ESTOP strictly engaged."
+    "Model-free pilot preparation landed for consented client el-shaddai-coffee-katowice in workspace/pilots/consented_pilot_spec_20261004.json and workspace/pilots/PILOT_SCORING_SHEET_2026-10-04.md (held-out task list, token/cost cap 100k/$1.00 USD, boundary governance, Polish ad relevance, stop conditions).",
+    "Hardened orchestrator/distribution.py to block unapproved client exports with EXPORT_BLOCKED while supporting explicit --allow-draft for marked internal drafts. Verified model-free dry runs execute with exit 0.",
+    "Release preflight evaluated via orchestrator/operator_cli.py preflight release --json: verified full model-free test gate green at 106/106 suites (unit 89, containment 8, integration 9, exit 0) and recorded 4 explicit blockers with assigned ownership (quiescence, git sync, egress attestation, off-machine audit retention).",
+    "Authored comprehensive verification brief and empirical reproduction runbook for Codex in docs/reviews/CODEX_VERIFICATION_BRIEF_2026-10-04.md covering all 7 packages (P0-A through P1-G). ESTOP strictly engaged."
   ],
   "locked_constraints": [
     "ESTOP engaged; no live provider calls or cohort without an explicit operator window.",
@@ -35,31 +35,31 @@
   "references": [
     {
       "path": "docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md",
-      "sha256": "9f16ab5c2f290b3361bdff157940403da10ee71a08c965d308473b7afaf21e88"
+      "sha256": "2627991f5a675352090d3f0686a58ac0ff3982ee58af006a64a47184cb83d3be"
     },
     {
-      "path": "docs/reviews/CODEX_PRODUCT_REVIEW_2026-10-04.md",
-      "sha256": "f7bea3696f1448f6ba06f143f95b1e18d211b6505345523de785d581f676f128"
+      "path": "docs/reviews/CODEX_VERIFICATION_BRIEF_2026-10-04.md",
+      "sha256": "c3fb076d21fcf8beed95abe5699743a3204f189e9aaf49ae13f3d5514e6061ad"
     },
     {
       "path": "docs/CURRENT_STATE.md",
-      "sha256": "647514017ee25e58782c66d7a197158d6458291a1309f0d04f98ed3fa5ee489f"
+      "sha256": "f8f8baccd4e0697e861f679586e5f39a919a3ce193e50905d0208b0b60074763"
     },
     {
       "path": "docs/ACTIVE_WORK.json",
-      "sha256": "95c126c9e3e574cbabf138e8048aafb210528889dc9e72cd0c616a780d7bb0f1"
+      "sha256": "4d3f5264e4c3444f0cf1dee9051cc8318193808f70f7bea17ec904584ebeac30"
     },
     {
       "path": "docs/README.md",
       "sha256": "296cd4463ad49d01627b392bf1e957e5e14bc5d2a1498b10798be6e4146712bf"
     },
     {
-      "path": "orchestrator/cost_accounting.py",
-      "sha256": "b35ab84c51892316bfbfbdc746419ae6b80cb7cf7b1f6d6c115b7e5efb03876f"
+      "path": "orchestrator/distribution.py",
+      "sha256": "a6b09969c46bd4b1772610bfd27ebd2a5bab7d1a19f1be955eb3546d3047b22b"
     },
     {
-      "path": "tests/test_cost_accounting.py",
-      "sha256": "c10dcfaec9093a771a031dd6341ba0c990b8c8f5fd8b75f0582c3a689fcc0a30"
+      "path": "workspace/pilots/consented_pilot_spec_20261004.json",
+      "sha256": "0d35c004119255fbafc4cd528f02d81a33754b0a8359b0154dd85a8e6444745e"
     }
   ]
 }

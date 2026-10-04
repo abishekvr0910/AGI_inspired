@@ -203,6 +203,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Compile client deliverables into Google Ads Editor bulk CSV and Strategy Dossier",
     )
     parser.add_argument(
+        "--allow-draft",
+        action="store_true",
+        help="Allow exporting marked internal draft when research sections are incomplete",
+    )
+    parser.add_argument(
         "--auto-pipeline",
         action="store_true",
         help="Run full end-to-end client venture pipeline: dispatch all research templates, build STAG campaign, export Google Ads Editor CSV, and generate strategy dossier",
@@ -321,7 +326,18 @@ def main(argv: list[str] | None = None) -> int:
                 root=args.root,
                 db_path=args.db_path,
                 runs_dir=args.runs_dir,
+                allow_draft=args.allow_draft,
             )
+            if not res.get("success", True):
+                if args.json:
+                    print(json.dumps(res, indent=2))
+                else:
+                    print(f"\n[EXPORT BLOCKED] Client: {res.get('client_id', args.client)}")
+                    print("=" * 60)
+                    print(f"  * Error:   {res.get('error')}")
+                    print(f"  * Message: {res.get('message')}")
+                    print("=" * 60 + "\n")
+                return 1
             if args.json:
                 print(json.dumps(res, indent=2))
             else:

@@ -1,7 +1,33 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-10-04T16:45:00Z",
+  "last_updated": "2026-10-04T17:05:00Z",
   "active_agents": [
+    {
+      "agent": "gemini-cli",
+      "role": "Principal Architect: P1-G Independent Release and Deployment Evidence",
+      "task_id": "PRODUCT-P1-G-2026-10-04",
+      "mode": "completed",
+      "owned_paths": [],
+      "started_at": "2026-10-04T16:55:00Z",
+      "last_update": "2026-10-04T17:05:00Z",
+      "status": "completed",
+      "blocked_by": null,
+      "handoff_path": "docs/reviews/CODEX_VERIFICATION_BRIEF_2026-10-04.md",
+      "notes": "COMPLETED: Evaluated release preflight via operator_cli.py preflight release --json. Verified full model-free test gate green at 106/106 suites (unit 89, containment 8, integration 9, exit 0). Recorded 4 explicit preflight blockers and assigned ownership: munder_process_quiescence (operator), git_upstream_synchronized (operator), worker_egress_boundary_attested (platform engineer), off_machine_audit_retention (cloud infra operator). Documented threat boundaries (Windows Job Objects / Restricted Tokens vs in-controller Native loop vs loopback CDP vs provisional Linux support). Verified vault credential storage (Ed25519 operator key fingerprint 27f41dc76ce76c2d, zero plaintext secrets). ESTOP strictly engaged. Ownership released."
+    },
+    {
+      "agent": "gemini-cli",
+      "role": "Principal Architect: P1-F Consented Client Pilot Preparation (Model-Free)",
+      "task_id": "PRODUCT-P1-F-2026-10-04",
+      "mode": "completed",
+      "owned_paths": [],
+      "started_at": "2026-10-04T16:45:00Z",
+      "last_update": "2026-10-04T16:55:00Z",
+      "status": "completed",
+      "blocked_by": null,
+      "handoff_path": "docs/reviews/CODEX_VERIFICATION_BRIEF_2026-10-04.md",
+      "notes": "COMPLETED: Model-free pilot preparation for consented client el-shaddai-coffee-katowice. Authored workspace/pilots/consented_pilot_spec_20261004.json freezing deliverables (dossier MD/HTML, Google Ads Editor paused CSV, JSON schema), held-out Polish specialty coffee task list, and budget cap ($1.00 USD / 100k tokens). Authored workspace/pilots/PILOT_SCORING_SHEET_2026-10-04.md defining boundary governance audit, claim-by-claim verification table, and offline Google Ads Editor import checks. Verified CLI dry runs (distribution.py --client el-shaddai-coffee-katowice --template all --dry-run) and hardened distribution.py to block unapproved client exports (EXPORT_BLOCKED) with explicit --allow-draft support. Live execution remains BLOCKED pending operator authorization. Ownership released."
+    },
     {
       "agent": "gemini-cli",
       "role": "Principal Architect: P1-E Honest Outcome and Cost Measurement",

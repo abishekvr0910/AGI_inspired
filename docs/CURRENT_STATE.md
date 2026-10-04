@@ -45,7 +45,21 @@ P1-E (honest outcome and cost measurement) is COMPLETED:
 - `orchestrator/ledger.py`: Updated `weekly_fitness` to safely handle nullable costs, count unpriced tasks, and calculate `independent_accuracy` strictly over genuine operator reviews.
 - `tests/test_cost_accounting.py`: Added 7 comprehensive regression tests (7/7 PASS); registered in `tests/tiers.json` under `unit`.
 Test gate expanded to 106/106 suites green (89 unit, 8 containment, 9 integration, exit 0).
-P1-F through P1-G cover a consented pilot and independent release/deployment evidence. All other implementation packages remain PENDING.
+P1-F (one consented pilot preparation) is PREPARED (MODEL-FREE):
+- `workspace/pilots/consented_pilot_spec_20261004.json`: Frozen pilot specification for `el-shaddai-coffee-katowice` defining deliverables (strategy dossier MD/HTML, Google Ads Editor paused CSV, JSON schema), held-out research tasks (`keyword_research`, `negative_keyword_harvest`, `ad_copy_variants`, `competitive_serp`), budget cap ($1.00 USD, 100,000 tokens), and stop conditions (ESTOP, HTTP 429, budget, timeout).
+- `workspace/pilots/PILOT_SCORING_SHEET_2026-10-04.md`: Human scoring protocol covering boundary governance audit, claim-by-claim verification table, Polish language quality checks, character limit validation, and offline Google Ads Editor import checks.
+- CLI Dry-Run & Gating: Verified model-free dry-run behavior via `python orchestrator/distribution.py --client el-shaddai-coffee-katowice --template all --dry-run` (exit 0) and hardened `orchestrator/distribution.py` to block unapproved client exports (`EXPORT_BLOCKED`) while supporting explicit `--allow-draft` for marked internal drafts.
+- Live execution remains strictly blocked pending operator window authorization with ESTOP engaged.
+P1-G (independent release and deployment evidence) is AUDITED & PREFLIGHT EVALUATED:
+- Executed `python -B orchestrator/operator_cli.py preflight release --json`. Model-free test gate passed 100% green (`106/106 suites green`, tiers: unit, containment, integration).
+- Blocker Registry & Ownership:
+  1. `munder_process_quiescence` (`source=psutil offenders=1`): Transient local process. Owner: Operator.
+  2. `git_upstream_synchronized` (`ahead=9 behind=0`): Commits currently local awaiting review and operator push. Owner: Operator.
+  3. `worker_egress_boundary_attested` (`endpoint=127.0.0.1:8787 error=attestation_mismatch`): Broker running with prior ephemeral attestation; requires refresh before live dispatch. Owner: Platform Engineer.
+  4. `off_machine_audit_retention` (`error=audit_enforcement_not_enabled`): Remote immutable S3 bucket unconfigured in local development environment; documented as an explicit enterprise deployment dependency. Owner: Cloud Infrastructure Operator.
+- Threat Boundary Audit: Documented boundary distinctions between Windows Job Objects / Restricted Tokens, Native in-controller agent loop, loopback-only CDP transport (127.0.0.1), and provisional status of Linux support.
+- Credential Security: Operator key stored in Windows Credential Manager (Ed25519, fingerprint `27f41dc76ce76c2d`); BytePlus/OpenAI provider secrets verified in Credential Manager with zero plaintext secrets in repository or environment.
+All P0 and P1 packages in `PRODUCT_COMPLETION_PLAN_2026-10-04.md` are now completed or model-free prepared.
 No new live window, credential write, policy widening, outreach, ad publication,
 or push is authorized by this plan. Historical implementation notes follow.
 
