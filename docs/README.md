@@ -1,5 +1,16 @@
 # Documentation Index & Agent Navigation Guide
 
+## Active Product Work
+
+Start with [Product Completion Plan](PRODUCT_COMPLETION_PLAN_2026-10-04.md)
+for the ordered P0-A through P1-G backlog, suggested agent assignments, file
+scopes, acceptance checks, and copy-paste handoffs. All implementation packages
+are pending until their owners record completion evidence.
+The [Codex Product Review](reviews/CODEX_PRODUCT_REVIEW_2026-10-04.md) records
+the independently measured baseline and current delivery gaps. These documents
+supersede earlier readiness ratings and next-action suggestions, not AGENTS.md
+or the existing safety/ownership rules.
+
 > [!IMPORTANT]
 > **CANONICAL ENTRY POINT FOR OPERATORS AND AUTONOMOUS AGENTS**  
 > This directory (`docs/`) is structured to provide an unambiguous, tamper-evident separation between **Canonical Living Documents** (active reality) and **Archived History** (forensic logs). Incoming agents MUST NOT execute or revive tasks from `docs/archive/`.

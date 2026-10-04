@@ -1,5 +1,35 @@
 # Canonical Project State - AGI_like Harness
 
+## Active Product Completion Handoff (2026-10-04)
+
+This section supersedes readiness claims and next-action wording below. The
+active implementation plan is `docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md`;
+measured evidence is in `docs/reviews/CODEX_PRODUCT_REVIEW_2026-10-04.md`.
+
+Current assessment: substantial research-control prototype and internal drafting
+tooling; client-ready delivery and enterprise deployment remain unproven.
+Codex independently ran the full model-free gate at `7d07d78`: 101/101 suites,
+exit 0. The subsequent `e193b8c` changed documentation only. At that planning
+baseline master was three commits ahead of the local origin/master reference.
+ESTOP was engaged, zero task rows were running, and continuity rev 174 recovered
+without discrepancies before this documentation handoff.
+
+The ledger contains 218 mixed historical tasks; its latest finished task is
+September 14. The 11 populated human_verdict fields require provenance review;
+they do not by themselves establish independent human accuracy. Recorded costs
+are zero despite token-bearing tasks, so actual cost per accepted task is unknown.
+Eight samples still have Ready to Send tracker entries and misleading stored
+artifacts. The sole record marked verified has incomplete research and generic
+service-business ad copy for a coffee client. See the review for exact evidence.
+
+Next action: claim P0-A (truthful sample generation and safe artifact remediation).
+P0-B then binds exports to complete, approved evidence. P1-C through P1-G cover
+browser/research proof, console acceptance, measurement, a consented pilot, and
+independent release/deployment evidence. All implementation packages are PENDING;
+suggested agent names in the plan are not active ownership claims.
+No new live window, credential write, policy widening, outreach, ad publication,
+or push is authorized by this plan. Historical implementation notes follow.
+
 > Forward implementation update (2026-09-04): dependency artifact hashes,
 > fail-closed egress and remote-audit protocols, and independent critic routing
 > are implemented. Deployment evidence remains required; no live execution is
