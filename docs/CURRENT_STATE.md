@@ -5,27 +5,39 @@
 > are implemented. Deployment evidence remains required; no live execution is
 > authorized.
 
-**Last Updated:** 2026-10-04 (Gemini Deep-Loop Research Autonomy & Bot-Block Evasion, Candidate Egress Harvesting, Batch Safe Approvals & Source Pivoting; 100/100 model-free suites green; ESTOP strictly engaged)
-**Superseding Phase:** Master Release Synchronized; Deep-Loop Research Autonomy Landed across native worker & preflight; Candidate Egress Harvesting & Pre-screened Batch Approvals Landed in policy manager & web console; Adaptive Source Pivoting wired. All 100 test suites green; ESTOP strictly engaged.
-**Current Verification:** Full model-free gate `python -B tests/run_all.py` passed 100/100 suites (unit 85, containment 8, integration 7), exit 0. Targeted: preflight 45/45, native worker 26/26, policy manager 58/58, web UI 3/3, hypothesis deep loop 3/3, egress policy 11/11, typed decisions 38/38, evaluator 14/14, secrets 28/28 assertions, dependency integrity 7/7 assertions. Continuity revision 168 valid. No live API call, secret write, egress-policy edit, ESTOP transition, outreach, or push occurred.
+**Last Updated:** 2026-10-04 (All 4 Operational Bleeding Points Landed: Egress Harvesting & Source Pivoting, Deep-Loop Research Autonomy & Bot-Block Evasion, Linux & Cloud-Native Portability, Web Console Ergonomics & Live Repair Diffs; 101/101 model-free suites green; ESTOP strictly engaged)
+**Superseding Phase:** Master Release Synchronized; Egress Allowlist Harvesting & Pre-screened Safe Approvals Landed; Deep-Loop Research Autonomy Landed; Platform Sandbox Abstraction for Linux & Cloud-Native Secrets Landed; Web Console One-Click Campaign Compiler, Dossier Downloads & Interactive Repair Diffs Landed. All 101 test suites green; ESTOP strictly engaged.
+**Current Verification:** Full model-free gate `python -B tests/run_all.py` passed 101/101 suites (unit 86, containment 8, integration 7), exit 0. Targeted: platform sandbox 5/5, preflight 45/45, native worker 26/26, policy manager 58/58, web UI 4/4, web UI security 9/9, hypothesis deep loop 3/3, egress policy 11/11, typed decisions 38/38, evaluator 14/14, secrets 28/28 assertions, dependency integrity 7/7 assertions. Continuity revision 169 valid. No live API call, secret write, egress-policy edit, ESTOP transition, outreach, or push occurred.
 **Current Handoff:** `docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md`; canonical implementation handoff remains `docs/CODEX_HANDOFF_TYPESAFE_JEV_TRANSPORT_2026-09-30.md`.
 
-## Current Landing (2026-10-04) — Deep-Loop Research Autonomy (Fix 2) & Egress Harvesting / Source Pivoting (Fix 1)
+## Current Landing (2026-10-04) — Operational Bleeding Points 1, 2, 3 & 4
 
-1. **Deep-Loop Research Autonomy & Bot-Block Evasion (Fix 2):**
+1. **Egress Allowlist Friction & Source Pivoting (Fix 1):**
+   - In `orchestrator/policy_manager.py`: Added `record_candidate(...)` with RFC hostname syntax validation and test-tier fixture-segregation guards to prevent polluting production runs. Added `approve_safe_candidates(...)` and `approve-safe` CLI command to pre-screen candidates (RFC syntax, public DNS resolution, anti-SSRF address verification, risk heuristics) and batch-approve safe domains with atomic `egress_policy.yaml` update and attestation re-signing.
+   - In `orchestrator/native_worker.py`: Integrated candidate domain harvesting on failed/blocked fetches during research turns.
+   - In `orchestrator/deliverable_preflight.py`: Added policy denial bounds exceeded to `requires_active_research()` and enhanced `format_repair_feedback()` with explicit adaptive source pivoting guidance (recommending official documentation, SEC filings, GitHub, and approved directories).
+   - In `orchestrator/trust_gateway.py` & `orchestrator/web_ui.py`: Added `approve_safe_candidates` method to `Gateway`, added `/api/candidates/approve-safe` POST endpoint, and added `Approve All Safe Candidates` button in the Web Console Policy Governance portal.
+   - Tests: Expanded `tests/test_policy_manager.py` to 58/58 tests and `tests/test_web_ui.py` to 4/4 tests.
+
+2. **Deep-Loop Research Autonomy & Bot-Block Evasion (Fix 2):**
    - In `orchestrator/native_worker.py`: Added `detect_access_block(status, text, title)` and anti-bot challenge signatures (`BOT_BLOCK_SIGNATURES`: Cloudflare, CAPTCHA, PerimeterX, DDoS-GUARD, HTTP 403/429/503).
    - In `execute_web_fetch()` & `execute_browser_extract()`: Detect access blocks and return `blocked: True` along with actionable `pivot_guidance` directing the model away from dead-end re-fetches toward third-party reviews, directories, and news coverage.
    - Multi-Turn Evidence Gating: In `run_native_research_turn()`, intercepted text completion when attempted fetches were blocked or failed (`verified_count == 0`), injecting directives instructing the model to formulate alternative search queries.
    - Tests: Expanded `tests/test_native_worker.py` to 26/26 tests covering bot-block detection, pivot guidance, and multi-turn research interception.
 
-2. **Egress Allowlist Friction & Source Pivoting (Fix 1):**
-   - In `orchestrator/policy_manager.py`: Added `record_candidate(...)` with RFC hostname syntax validation and test-tier fixture-segregation guards to prevent polluting production runs. Added `approve_safe_candidates(...)` and `approve-safe` CLI command to pre-screen candidates (RFC syntax, public DNS resolution, anti-SSRF address verification, risk heuristics) and batch-approve safe domains with atomic `egress_policy.yaml` update and attestation re-signing.
-   - In `orchestrator/native_worker.py`: Integrated candidate domain harvesting on failed/blocked fetches during research turns.
-   - In `orchestrator/deliverable_preflight.py`: Added policy denial bounds exceeded to `requires_active_research()` and enhanced `format_repair_feedback()` with explicit adaptive source pivoting guidance (recommending official documentation, SEC filings, GitHub, and approved directories).
-   - In `orchestrator/trust_gateway.py` & `orchestrator/web_ui.py`: Added `approve_safe_candidates` method to `Gateway`, added `/api/candidates/approve-safe` POST endpoint, and added `Approve All Safe Candidates` button in the Web Console Policy Governance portal.
-   - Tests: Expanded `tests/test_policy_manager.py` to 58/58 tests and `tests/test_web_ui.py` to 3/3 tests.
+3. **Linux & Cloud-Native Portability (Fix 3):**
+   - In `orchestrator/platform_sandbox.py`: Created unified platform abstraction layer detecting host OS (Windows, Linux, macOS) and container environments (Docker, Kubernetes). Implemented POSIX process group / session containment (`start_new_session=True` / `os.killpg`) and Linux cgroups v2 integration (`/sys/fs/cgroup`).
+   - In `orchestrator/pty_daemon.py` & `orchestrator/worker_sandbox.py`: Guarded all Win32 ctypes and Job Object APIs with platform-conditional checks, eliminating module-import failures on Linux/macOS. Added POSIX delegation for worker process spawning and termination.
+   - In `orchestrator/secrets.py`: Added cross-platform secret discovery supporting mounted Kubernetes / Docker secret files (`AGI_SECRETS_DIR`, `/var/run/secrets/agi/`, `/run/secrets/`, `/etc/secrets/`) as first-class providers before falling back to environment variables.
+   - Tests: Added `tests/test_platform_sandbox.py` (5/5 PASS) and registered in `tests/tiers.json` under `unit` tier.
 
-3. **Gate Status:** 100/100 suites green (85 unit, 8 containment, 7 integration) exit 0; ESTOP strictly engaged (`True`).
+4. **Operational & Web Console Ergonomics (Fix 4):**
+   - In `orchestrator/trust_gateway.py`: Added `get_task_diff(task_id)` computing unified diffs between initial attempt raw output and repaired deliverable, with added/removed line counts.
+   - In `orchestrator/web_ui.py`: Added `GET /api/tasks/<task_id>/diff`, `GET /api/clients/<client_id>/download-dossier-html`, `GET /api/clients/<client_id>/download-dossier-md`, and `POST /api/clients/<client_id>/compile-package`.
+   - UI Upgrades: Added tabbed inspection in `#deliverable-modal` (`[Split View]` vs `[Interactive Repair Diff]` with syntax highlighting: +green additions, -red deletions, @@cyan coordinates), and added one-click direct download links for Google Ads Editor CSV, Dark-Mode HTML, and Strategy Markdown in campaign compiler preview drawer.
+   - Tests: Added comprehensive endpoint tests to `tests/test_web_ui.py` (4/4 PASS) and `tests/test_web_ui_security.py` (9/9 PASS).
+
+5. **Canonical Test Gate:** 101/101 suites green (86 unit, 8 containment, 7 integration) exit 0; ESTOP strictly engaged (`True`).
 
 1. **Deep-Loop Re-Search Architecture Upgrade:** Solved the "one-shot repair amnesia" bottleneck diagnosed in the empirical ablation study (Tasks 216–222).
    - In `orchestrator/deliverable_preflight.py`: Added `requires_active_research(report)` and updated `build_repair_prompt(...)` to inject an explicit mandatory re-search directive banner.

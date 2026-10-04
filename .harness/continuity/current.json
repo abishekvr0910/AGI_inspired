@@ -1,25 +1,27 @@
 {
   "schema_version": 2,
-  "brief_revision": 168,
-  "created_at": "2026-10-04T05:19:00.000000+00:00",
+  "brief_revision": 169,
+  "created_at": "2026-10-04T05:42:00.000000+00:00",
   "status": "completed",
   "repository": {
     "branch": "master",
     "upstream": "origin/master",
     "tree_clean": true,
     "changed_paths": [],
-    "based_on_head": "dafa4a547b8533ab134cb67f0154271f8fcffbc6"
+    "based_on_head": "7f630124e73d8a8b4934d67f352eff0f5a121c00"
   },
   "task": {
-    "id": "DEEP-LOOP-RESEARCH-AUTONOMY-AND-EGRESS-PIVOT-2026-10-04",
-    "phase": "deep_loop_research_autonomy_and_egress_harvesting_complete",
+    "id": "FOUR-BLEEDING-POINTS-COMPLETION-2026-10-04",
+    "phase": "all_four_bleeding_points_landed_and_verified",
     "status": "completed",
-    "next_action": "Proceed to Bleeding Point 3 (Linux & Cloud-Native Portability) or Bleeding Point 4 (Web Console Campaign Generation & Live Interactive Diffs)."
+    "next_action": "Provide operator with comprehensive final verdict and status report across all operational bleeding points and capabilities."
   },
   "completed": [
+    "Landed Fix 1: Egress Allowlist Friction & Source Pivoting with automated candidate harvesting, pre-screened safe domain batch approvals, and preflight adaptive source pivoting.",
     "Landed Fix 2: Deep-Loop Research Autonomy with anti-bot challenge detection, pivot guidance, and multi-turn verified evidence gating.",
-    "Landed Fix 1: Egress Allowlist Candidate Harvesting during runs, pre-screened batch approvals in policy_manager and web console, and adaptive source pivoting.",
-    "Full model-free test gate passed 100/100 suites green (85 unit, 8 containment, 7 integration) exit 0; ESTOP strictly engaged."
+    "Landed Fix 3: Linux & Cloud-Native Portability with platform_sandbox.py abstraction layer (Windows Job Objects / POSIX process sessions / Linux cgroups v2) and cross-platform Kubernetes/Docker volume mount secrets.",
+    "Landed Fix 4: Operational & Web Console Ergonomics with one-click campaign compilation, real-time Google Ads Editor Bulk CSV, Dark-Mode HTML and Markdown dossier downloads, and interactive unified repair diff inspection.",
+    "Full model-free test gate expanded to 101/101 suites green (86 unit, 8 containment, 7 integration) exit 0; ESTOP strictly engaged."
   ],
   "locked_constraints": [
     "ESTOP engaged; no live call absent an explicitly authorized human window.",
@@ -28,16 +30,16 @@
   ],
   "gate": {
     "status": "passed",
-    "detail": "100/100 suites (85 unit, 8 containment, 7 integration), exit 0; preflight 45/45, native worker 26/26, policy manager 58/58, web UI 3/3, hypothesis suite 3/3; ESTOP=True; zero live calls."
+    "detail": "101/101 suites (86 unit, 8 containment, 7 integration), exit 0; platform sandbox 5/5, preflight 45/45, native worker 26/26, policy manager 58/58, web UI 4/4, web UI security 9/9, hypothesis deep loop 3/3; ESTOP=True; zero live calls."
   },
   "references": [
     {
       "path": "docs/CURRENT_STATE.md",
-      "sha256": "068367555fec772321a3291a871b45171933edb69be76a72b47cb164f5ba3778"
+      "sha256": "1bacbd370c7970f0b27ec25b3d173c42f514f53ad50c91ed38dd6e7ebb5a0125"
     },
     {
       "path": "docs/ACTIVE_WORK.json",
-      "sha256": "5462dd2b9c6b14d435b7a634dfc949cadf0839548a6f61cb87e266117b2af035"
+      "sha256": "ac5104955d8bb6c43a3d262dc28a5852c2ed6aaa5cd0fa62c9d077991e1866c5"
     },
     {
       "path": "docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md",
@@ -53,7 +55,7 @@
     },
     {
       "path": "orchestrator/secrets.py",
-      "sha256": "eb7781ec94011fdfab837f9aa71faaecaf0eb9d03f66e7511a58b2160ff7329a"
+      "sha256": "040c6f1a641a40d94c370800be00592afc87a7916937eed77aa75bea00540a03"
     },
     {
       "path": "tests/test_typed_decisions.py",
