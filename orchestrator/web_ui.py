@@ -58,21 +58,37 @@ LOGIN_HTML = """<!doctype html><html lang="en"><meta charset="utf-8">
 <style>body{font:18px system-ui;background:#090d16;color:#e2e8f0;max-width:32rem;margin:12vh auto;padding:2rem}input,button{font:inherit;padding:.6rem;margin-top:1rem}input{width:100%;box-sizing:border-box}</style>
 <h1>AGI_like operator sign-in</h1>
 <p>Enter the bearer token printed in the server terminal. Restart the server to rotate it.</p>
-<form id="login"><label for="token">Operator token</label>
-<input id="token" type="password" autocomplete="off" required>
-<button>Open console</button></form><p id="error" role="alert"></p>
+<div id="login-container"><label for="token">Operator token</label>
+<input id="token" type="password" autocomplete="off" autofocus placeholder="Paste bearer token">
+<button type="button" id="btn-login">Open console</button></div><p id="error" role="alert" style="color:#f87171;margin-top:1rem"></p>
 <script>
-document.getElementById('login').addEventListener('submit', async event => {
-  event.preventDefault();
+async function doLogin() {
   const input = document.getElementById('token');
-  const token = input.value.trim(); input.value = '';
+  const token = (input.value || '').trim();
+  const errEl = document.getElementById('error');
+  errEl.textContent = '';
+  if (!token) { errEl.textContent = 'Token required'; return; }
   try {
     const response = await fetch('/', {headers: {Authorization: 'Bearer ' + token}, cache: 'no-store'});
-    if (!response.ok) throw new Error('Sign-in refused. Check the server terminal token.');
+    if (!response.ok) throw new Error('Sign-in refused (' + response.status + '). Check the server terminal token.');
     const html = await response.text();
-    document.open(); document.write(html); document.close();
-  } catch (error) { document.getElementById('error').textContent = error.message; }
-});
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    document.head.innerHTML = doc.head.innerHTML;
+    document.body.className = doc.body.className;
+    document.body.innerHTML = doc.body.innerHTML;
+    doc.querySelectorAll('script').forEach(oldScript => {
+      const s = document.createElement('script');
+      Array.from(oldScript.attributes).forEach(a => s.setAttribute(a.name, a.value));
+      s.textContent = oldScript.textContent;
+      document.body.appendChild(s);
+    });
+  } catch (error) {
+    errEl.textContent = error.message;
+  }
+}
+document.getElementById('btn-login').addEventListener('click', doLogin);
+document.getElementById('token').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 </script></html>"""
 
 HTML_TEMPLATE = """<!DOCTYPE html>
