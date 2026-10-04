@@ -113,6 +113,16 @@ def get_api_key(provider: str) -> str | None:
                 return value
         except Exception:
             pass
+
+    # 2. Container/Cloud-Native Secret Volume Mounts (/run/secrets, AGI_SECRETS_DIR)
+    try:
+        from platform_sandbox import read_mounted_secret
+        mounted_val = read_mounted_secret(normalized)
+        if mounted_val:
+            return mounted_val
+    except Exception:
+        pass
+
     value = os.environ.get(_ENVIRONMENT_KEYS[normalized], "").strip()
     return value or None
 
@@ -125,5 +135,16 @@ def credential_manager_has_api_key(provider: str) -> bool:
     try:
         record = _win32cred.CredRead(target, _win32cred.CRED_TYPE_GENERIC, 0)
         return _credential_blob(record) is not None
+    except Exception:
+        return False
+
+
+def vault_or_manager_has_api_key(provider: str) -> bool:
+    """Report vault or container secret presence without returning or logging credential material."""
+    if credential_manager_has_api_key(provider):
+        return True
+    try:
+        from platform_sandbox import read_mounted_secret
+        return read_mounted_secret(provider) is not None
     except Exception:
         return False

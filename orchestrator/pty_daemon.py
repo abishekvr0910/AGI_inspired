@@ -10,26 +10,31 @@ from __future__ import annotations
 import ctypes
 import os
 import subprocess
+import sys
 import threading
 from ctypes import wintypes
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 from worker_sandbox import RestrictedProcess
 
 # ── kernel32 types and constants (ctypes only, no pywin32 dependency) ──────
 
-_kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-_ntdll = ctypes.WinDLL("ntdll", use_last_error=True)  # type: ignore[attr-defined]
+if sys.platform == "win32":
+    _kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    _ntdll = ctypes.WinDLL("ntdll", use_last_error=True)  # type: ignore[attr-defined]
 
-# HANDLE is pointer-sized, including on 64-bit Windows.
-for _function, _arguments, _result in (
-    (_kernel32.CreateJobObjectW, [wintypes.LPVOID, wintypes.LPCWSTR], wintypes.HANDLE),
-    (_kernel32.SetInformationJobObject, [wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD], wintypes.BOOL),
-    (_kernel32.AssignProcessToJobObject, [wintypes.HANDLE, wintypes.HANDLE], wintypes.BOOL),
-    (_kernel32.TerminateJobObject, [wintypes.HANDLE, wintypes.UINT], wintypes.BOOL),
-    (_kernel32.CloseHandle, [wintypes.HANDLE], wintypes.BOOL),
-):
-    _function.argtypes, _function.restype = _arguments, _result
+    # HANDLE is pointer-sized, including on 64-bit Windows.
+    for _function, _arguments, _result in (
+        (_kernel32.CreateJobObjectW, [wintypes.LPVOID, wintypes.LPCWSTR], wintypes.HANDLE),
+        (_kernel32.SetInformationJobObject, [wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD], wintypes.BOOL),
+        (_kernel32.AssignProcessToJobObject, [wintypes.HANDLE, wintypes.HANDLE], wintypes.BOOL),
+        (_kernel32.TerminateJobObject, [wintypes.HANDLE, wintypes.UINT], wintypes.BOOL),
+        (_kernel32.CloseHandle, [wintypes.HANDLE], wintypes.BOOL),
+    ):
+        _function.argtypes, _function.restype = _arguments, _result
+else:
+    _kernel32 = None
+    _ntdll = None
 
 CREATE_SUSPENDED = 0x00000004
 JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
@@ -237,6 +242,41 @@ def create_contained_process(
     if not command_list:
         raise PtyDaemonError("command_list must be non-empty")
 
+    if sys.platform != "win32":
+        from platform_sandbox import spawn_posix_worker, PosixJobHandle
+        try:
+            if restricted_worker:
+                proc = spawn_posix_worker(command_list, cwd, env)
+                h_job = proc.job_handle
+            else:
+                pop = subprocess.Popen(
+                    command_list,
+                    cwd=str(cwd) if cwd else None,
+                    env=env,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
+                    start_new_session=True,
+                )
+                h_job = PosixJobHandle(pid=pop.pid, pgid=pop.pid)
+                proc = pop
+
+            if close_stdin and hasattr(proc, "stdin") and proc.stdin is not None:
+                try:
+                    proc.stdin.close()
+                except Exception:
+                    pass
+
+            stdout_drain = PipeDrain(proc.stdout, "stdout")
+            stderr_drain = PipeDrain(proc.stderr, "stderr")
+            return proc, h_job, stdout_drain, stderr_drain
+        except Exception as exc:
+            raise PtyDaemonError(str(exc)) from exc
+
     h_job = _create_job_object()
     proc = None
     drains = []
@@ -298,24 +338,44 @@ def create_contained_process(
         raise PtyDaemonError(str(exc)) from exc
 
 
-def terminate_job(h_job: int, exit_code: int = 75) -> None:
-    """Terminate every process in a Job Object.
+def terminate_job(h_job: Any, exit_code: int = 75) -> None:
+    """Terminate every process in a Job Object or POSIX process group.
 
-    This is the ESTOP-watchdog primitive: a single kernel call reaps the
-    entire process tree (``conhost.exe``, child runners, etc.).
+    This is the ESTOP-watchdog primitive: a single call reaps the
+    entire process tree (child processes, subprocess trees, etc.).
     """
-    _terminate_job(h_job, exit_code)
+    if sys.platform == "win32":
+        _terminate_job(h_job, exit_code)
+    else:
+        if hasattr(h_job, "terminate"):
+            h_job.terminate(exit_code)
+        elif isinstance(h_job, int) and h_job > 0:
+            import signal
+            if hasattr(os, "killpg"):
+                try:
+                    os.killpg(h_job, signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    pass
+            elif hasattr(os, "kill"):
+                try:
+                    os.kill(h_job, signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    pass
 
 
-def close_job(h_job: int) -> None:
-    """Close a Job Object handle, triggering ``KILL_ON_JOB_CLOSE``.
+def close_job(h_job: Any) -> None:
+    """Close a Job Object handle or clean up POSIX job resources.
 
     Idempotent — safe to call even if the job was already terminated.
     """
-    _close_handle(h_job)
+    if sys.platform == "win32":
+        _close_handle(h_job)
+    else:
+        if hasattr(h_job, "close"):
+            h_job.close()
 
 
-def job_terminator() -> Callable[[int], None]:
+def job_terminator() -> Callable[[Any], None]:
     """Return a function suitable as an ESTOP-watchdog callback.
 
     Usage::
@@ -325,8 +385,8 @@ def job_terminator() -> Callable[[int], None]:
         watchdog(h_job)   # → terminate + close
     """
 
-    def _terminate(h_job: int) -> None:
-        _terminate_job(h_job)
-        _close_handle(h_job)
+    def _terminate(h_job: Any) -> None:
+        terminate_job(h_job)
+        close_job(h_job)
 
     return _terminate

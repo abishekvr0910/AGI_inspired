@@ -33,7 +33,8 @@
     "test_distribution_cli",
     "test_native_worker",
     "test_distribution_phase2",
-    "test_campaign_builder_regression", "test_client_reporter", "test_typesafe_evaluator", "test_typed_decisions", "test_hypothesis_deep_loop"
+    "test_campaign_builder_regression", "test_client_reporter", "test_typesafe_evaluator", "test_typed_decisions", "test_hypothesis_deep_loop",
+    "test_platform_sandbox"
   ],
   "containment": [
     "test_worker_sandbox",

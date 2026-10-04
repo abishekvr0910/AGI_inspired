@@ -7,11 +7,15 @@ grant Users, Everyone or Restricted Code access. Production ACLs are untouched.
 from __future__ import annotations
 
 import ctypes
-from ctypes import wintypes as w
+try:
+    from ctypes import wintypes as w
+except ImportError:
+    w = None
 import io
 import os
 from pathlib import Path
 import subprocess
+import sys
 import uuid
 
 
@@ -82,10 +86,15 @@ def worker_environment(base: dict[str, str], authentication: dict[str, str]) -> 
     home = base.get("HARNESS_WORKER_HOME", "")
     if not home or not Path(home).is_absolute() or not Path(home).is_dir():
         raise SandboxError("dedicated_HARNESS_WORKER_HOME_required")
-    allowed = {"SYSTEMROOT", "WINDIR", "COMSPEC", "PATH", "PATHEXT",
-               "PROCESSOR_ARCHITECTURE", "NUMBER_OF_PROCESSORS"}
-    env = {k.upper(): v for k, v in base.items() if k.upper() in allowed}
-    env.update({"HOME": home, "USERPROFILE": home, "TEMP": home, "TMP": home,
+    if sys.platform == "win32":
+        allowed = {"SYSTEMROOT", "WINDIR", "COMSPEC", "PATH", "PATHEXT",
+                   "PROCESSOR_ARCHITECTURE", "NUMBER_OF_PROCESSORS"}
+        env = {k.upper(): v for k, v in base.items() if k.upper() in allowed}
+    else:
+        allowed = {"PATH", "LANG", "LC_ALL", "SHELL", "TERM", "USER", "LOGNAME",
+                   "HOSTNAME", "PWD", "LD_LIBRARY_PATH", "SSL_CERT_FILE", "SSL_CERT_DIR"}
+        env = {k: v for k, v in base.items() if k in allowed}
+    env.update({"HOME": home, "USERPROFILE": home, "TEMP": home, "TMP": home, "TMPDIR": home,
                 "PYTHONIOENCODING": "utf-8", "PYTHONNOUSERSITE": "1",
                 "PYTHONDONTWRITEBYTECODE": "1"})
     # Provider transport supplies this small mapping, not arbitrary worker input.
@@ -216,6 +225,9 @@ def spawn_suspended(command: list[str], cwd, env: dict[str, str]) -> RestrictedP
                      "batch_runner.py", "run_task.py", "onboarding_autonomy.py", "run_daily.py"}
         if any(Path(arg).name.lower() in forbidden for arg in command):
             raise SandboxError("live_worker_blocked_in_model_free_test")
+    if sys.platform != "win32":
+        from platform_sandbox import spawn_posix_worker
+        return spawn_posix_worker(command, cwd, env)
     import msvcrt
     import win32security as security
     kernel, advapi, user = _api()

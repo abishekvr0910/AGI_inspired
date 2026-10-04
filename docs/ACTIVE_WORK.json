@@ -1,7 +1,20 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-10-04T05:03:00Z",
+  "last_updated": "2026-10-04T05:36:00Z",
   "active_agents": [
+    {
+      "agent": "gemini-cli",
+      "role": "Principal Architect: Linux & Cloud-Native Portability (Platform Sandbox, POSIX/cgroup Containment, Cross-Platform Secrets)",
+      "task_id": "PLATFORM-PORTABILITY-LINUX-SANDBOX-AND-SECRETS-2026-10-04",
+      "mode": "completed",
+      "owned_paths": [],
+      "started_at": "2026-10-04T05:36:00Z",
+      "last_update": "2026-10-04T05:41:00Z",
+      "status": "completed",
+      "blocked_by": null,
+      "handoff_path": null,
+      "notes": "COMPLETED: Landed Fix 3 (Linux & Cloud-Native Portability): platform abstraction layer in platform_sandbox.py for process containment (Windows Job Objects / POSIX process sessions / Linux cgroups v2), cross-platform secret management in secrets.py (K8s/Docker volume mounts + Win32 Credential Manager + env), and OS-portable worker environment filtering. Added test_platform_sandbox.py to unit tier; full gate 101/101 suites green."
+    },
     {
       "agent": "gemini-cli",
       "role": "Principal Architect: Operational & Web Console Ergonomics (Campaign Package Compiler, Live Diffs, Dossier Hub)",
