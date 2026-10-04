@@ -1,27 +1,30 @@
 {
   "schema_version": 2,
-  "brief_revision": 169,
-  "created_at": "2026-10-04T05:42:00.000000+00:00",
+  "brief_revision": 170,
+  "created_at": "2026-10-04T10:12:20.595542+00:00",
   "status": "completed",
   "repository": {
     "branch": "master",
     "upstream": "origin/master",
-    "tree_clean": true,
-    "changed_paths": [],
-    "based_on_head": "7f630124e73d8a8b4934d67f352eff0f5a121c00"
+    "tree_clean": false,
+    "changed_paths": [
+      ".harness/continuity/current.json"
+    ],
+    "based_on_head": "0041ab83547bae280fd443d936d82792de9f116a"
   },
   "task": {
-    "id": "FOUR-BLEEDING-POINTS-COMPLETION-2026-10-04",
-    "phase": "all_four_bleeding_points_landed_and_verified",
+    "id": "DOCUMENTATION-ARCHIVE-AND-INDEX-2026-10-04",
+    "phase": "stagnant_docs_archived_and_master_index_authored",
     "status": "completed",
-    "next_action": "Provide operator with comprehensive final verdict and status report across all operational bleeding points and capabilities."
+    "next_action": "Operator ready to deploy autonomous agents or proceed with production campaigns."
   },
   "completed": [
-    "Landed Fix 1: Egress Allowlist Friction & Source Pivoting with automated candidate harvesting, pre-screened safe domain batch approvals, and preflight adaptive source pivoting.",
-    "Landed Fix 2: Deep-Loop Research Autonomy with anti-bot challenge detection, pivot guidance, and multi-turn verified evidence gating.",
-    "Landed Fix 3: Linux & Cloud-Native Portability with platform_sandbox.py abstraction layer (Windows Job Objects / POSIX process sessions / Linux cgroups v2) and cross-platform Kubernetes/Docker volume mount secrets.",
-    "Landed Fix 4: Operational & Web Console Ergonomics with one-click campaign compilation, real-time Google Ads Editor Bulk CSV, Dark-Mode HTML and Markdown dossier downloads, and interactive unified repair diff inspection.",
-    "Full model-free test gate expanded to 101/101 suites green (86 unit, 8 containment, 7 integration) exit 0; ESTOP strictly engaged."
+    "Archived 22 stagnant task directives to docs/archive/tasks/ and 31 historical agent handoffs to docs/archive/handoffs/.",
+    "Archived 13 obsolete status reports to docs/archive/historical/ and consolidated 11 loose review files to docs/reviews/.",
+    "Preserved 8 canonical living documents and 4 active security/operational runbooks in docs/ root.",
+    "Authored docs/README.md master navigation index and docs/archive/README.md agent guardrail banner.",
+    "Updated AGENTS.md and GEMINI.md with explicit directives preventing incoming agents from following archived directives.",
+    "Full model-free test gate 101/101 suites green (86 unit, 8 containment, 7 integration); ESTOP strictly engaged."
   ],
   "locked_constraints": [
     "ESTOP engaged; no live call absent an explicitly authorized human window.",
@@ -30,23 +33,23 @@
   ],
   "gate": {
     "status": "passed",
-    "detail": "101/101 suites (86 unit, 8 containment, 7 integration), exit 0; platform sandbox 5/5, preflight 45/45, native worker 26/26, policy manager 58/58, web UI 4/4, web UI security 9/9, hypothesis deep loop 3/3; ESTOP=True; zero live calls."
+    "detail": "101/101 suites (86 unit, 8 containment, 7 integration), exit 0; docs reorganized with zero reference breakage; ESTOP=True; zero live calls."
   },
   "references": [
     {
       "path": "docs/CURRENT_STATE.md",
-      "sha256": "1bacbd370c7970f0b27ec25b3d173c42f514f53ad50c91ed38dd6e7ebb5a0125"
+      "sha256": "4c8ca74229284c458a429e5c86dfdeb02dfbee3ac84ac17939f24b7e3efe4651"
     },
     {
       "path": "docs/ACTIVE_WORK.json",
-      "sha256": "ac5104955d8bb6c43a3d262dc28a5852c2ed6aaa5cd0fa62c9d077991e1866c5"
+      "sha256": "f8e7c76b879a1fb65f44b16e276f012caefbfad5adc8fba944f761b73e1fbdf6"
     },
     {
       "path": "docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md",
       "sha256": "db905cb71a366ecea1a272b024e798e49abf501dd504dd04f3bd213bcfc5a517"
     },
     {
-      "path": "docs/CODEX_HANDOFF_TYPESAFE_JEV_TRANSPORT_2026-09-30.md",
+      "path": "docs/archive/handoffs/CODEX_HANDOFF_TYPESAFE_JEV_TRANSPORT_2026-09-30.md",
       "sha256": "0521c8898ccbfde6b429e5453f06d551c2a82c4d33d24a85069d3faced7e109d"
     },
     {
