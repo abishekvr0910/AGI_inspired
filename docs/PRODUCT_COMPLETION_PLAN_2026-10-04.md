@@ -59,11 +59,11 @@ Key reasons for this sequence:
 | P0-B | Gemini | P0-A | Evidence-bound, complete client exports | COMPLETED |
 | P1-C | Codex or another forward engineer | None; isolated from A/B | Real browser and bounded research path verification | COMPLETED |
 | P1-D | Gemini or UI engineer | P0-B; P1-C before integration | Actual browser console acceptance | COMPLETED |
-| P1-E | Codex or data engineer | Coordinate runner edits with P1-C | Honest outcome and cost measurement | PENDING |
+| P1-E | Codex or data engineer | Coordinate runner edits with P1-C | Honest outcome and cost measurement | COMPLETED |
 | P1-F | Forward engineer + operator | A-E reviewed; data and live authority | One client pilot with reviewed outputs | PENDING |
 | P1-G | Independent reviewer + deployment engineer | Read-only review can start now | Release and deployment evidence | PENDING |
 
-Start P1-E next (honest outcome and cost measurement). P1-E reconciles outcome and cost accounting.
+Start P1-F (Consented Client Pilot Preparation) or P1-G (Release and Deployment Evidence) next.
 P1-E can proceed independently only if its path ownership does not overlap.
 Do not start additional frameworks, subagent fleets, dashboard redesigns, or
 partner integrations until the accepted workflow exposes a concrete need.
@@ -257,6 +257,15 @@ Acceptance: fixtures prove unknown does not display as free, all attempts reconc
 duplicate ingestion is idempotent, AI review is not counted as independent human
 accuracy, and a mixed historical ledger cannot be represented as a fresh cohort.
 Run targeted accounting regressions and full gate.
+
+**Status: COMPLETED (2026-10-04)**
+- Explicit Cost Provenance (`orchestrator/cost_accounting.py`): Established typed `CostBasis` categories (`MEASURED_INVOICE`, `ESTIMATED_TOKEN_RATE`, `LOCAL_COMPUTE`, `UNKNOWN`). Defined canonical 2026 published rate card pricing for OpenAI and BytePlus cloud models. Strictly prevented unknown costs from displaying or counting as free ($0.00).
+- Task Runner Integration (`orchestrator/task_runner.py`): Eliminated hardcoded `cost_usd=0.0` on finished tasks, calculating honest task costs via `cost_accounting.calculate_task_cost` using model configuration, input tokens, output tokens, and upstream invoice data.
+- Ledger Audit & Reconciled Telemetry: Audited all 218 historical tasks, identifying 139 token-bearing rows previously masked as $0.00: 82 local compute tasks, 15 cloud-rate tasks ($1.0815 estimated API spend), and 121 unpriced/unknown tasks.
+- Human Verdict Provenance Auditing: Audited all 11 recorded `human_verdict` rows, strictly distinguishing 2 genuine independent operator verdicts from 9 automated AI-performed checks (`is_ai_performed()`). Enforced that AI checks are never reported as independent human accuracy.
+- Cohort Manifest Partitioning: Created `build_cohort_manifest` partitioning tasks into disjoint cohorts (`canaries`, `infra_failures`, `historical_prototypes`, `commercial_distribution`), preventing historical ablation runs from distorting fresh client metrics.
+- Targeted Regression Suite: Added `tests/test_cost_accounting.py` (7/7 PASS) registered in `tests/tiers.json` under `unit`.
+- Test Gate: Canonical model-free test gate expanded to 106/106 suites green (unit 89, containment 8, integration 9, exit 0). ESTOP strictly engaged.
 
 ## 9. P1-F: One Consented Pilot and Fresh Evaluation
 

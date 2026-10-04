@@ -36,7 +36,8 @@
     "test_campaign_builder_regression", "test_client_reporter", "test_typesafe_evaluator", "test_typed_decisions", "test_hypothesis_deep_loop",
     "test_platform_sandbox",
     "test_sample_remediation",
-    "test_evidence_gate"
+    "test_evidence_gate",
+    "test_cost_accounting"
   ],
   "containment": [
     "test_worker_sandbox",

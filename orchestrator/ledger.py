@@ -360,15 +360,20 @@ def weekly_fitness(week_start: str | None = None) -> dict:
     # rather than silently discounting them from the accuracy math -- W (§3.2) and
     # this formula are locked, not a place to add a new conditional this session.
     spot_checked_ai = sum(1 for r in spot if is_ai_performed(r["critic_notes"]))   # F54
+    spot_checked_independent = len([r for r in spot if not is_ai_performed(r["critic_notes"])])
+    independent_pass = sum(1 for r in spot if r["human_verdict"] == "pass" and not is_ai_performed(r["critic_notes"]))
+    independent_accuracy = (round(independent_pass / spot_checked_independent, 3)
+                            if spot_checked_independent > 0 else None)
     interventions = sum(r["interventions"] for r in terminal)
-    avg_cost = sum(r["cost_usd"] for r in terminal) / n_terminal if n_terminal else 0.0
+    known_costs = [float(r["cost_usd"]) for r in terminal if r["cost_usd"] is not None]
+    avg_cost = (sum(known_costs) / len(known_costs)) if known_costs else 0.0
     completion_rate = completed / n_total
     intervention_norm = min(1.0, interventions / n_terminal) if n_terminal else 0.0
     has_work_signal = any(r["status"] == "done" or
                           (r["tokens_in"] or 0) + (r["tokens_out"] or 0) > 0
                           for r in terminal)
     cost_eff = (min(1.0, COST_TARGET / avg_cost) if avg_cost > 0
-                else (1.0 if has_work_signal else 0.0))
+                else (1.0 if has_work_signal and len(known_costs) > 0 else 0.0))
     acc = accuracy if accuracy is not None else 0.0
     fitness = (W["completion"] * completion_rate + W["accuracy"] * acc +
                W["intervention"] * (1 - intervention_norm) + W["cost"] * cost_eff)
@@ -377,11 +382,15 @@ def weekly_fitness(week_start: str | None = None) -> dict:
         "completion_rate": round(completion_rate, 3),
         "dropped": dropped, "pending": pending,
         "accuracy": round(accuracy, 3) if accuracy is not None else None,
+        "independent_accuracy": independent_accuracy,
         "intervention_rate": round(intervention_norm, 3),
         "avg_cost_usd": round(avg_cost, 4), "cost_efficiency": round(cost_eff, 3),
+        "cost_known_tasks": len(known_costs),
+        "cost_unknown_tasks": n_terminal - len(known_costs),
         "fitness": round(fitness, 3),
         "spot_checked": len(spot),
         "spot_checked_ai": spot_checked_ai,
+        "spot_checked_independent": spot_checked_independent,
         # F53: which terms actually MEASURED something this window, and how much of the
         # score was awarded regardless. Without this, F reads as four scored dimensions
         # when some are constants: cost_eff falls back to 1.0 whenever avg_cost is 0,

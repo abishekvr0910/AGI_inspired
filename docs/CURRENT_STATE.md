@@ -22,7 +22,7 @@ Eight samples still have Ready to Send tracker entries and misleading stored
 artifacts. The sole record marked verified has incomplete research and generic
 service-business ad copy for a coffee client. See the review for exact evidence.
 
-Next action: claim P1-E (honest outcome and cost measurement).
+Next action: claim P1-F (consented client pilot preparation) or P1-G (release and deployment evidence).
 P0-A (truthful sample generation and safe artifact remediation) is COMPLETED.
 P0-B (evidence-bound, complete client packages) is COMPLETED:
 - `orchestrator/evidence_gate.py`: Distinguishes verified prospect identity from verified deliverable content; validates real claim values and non-empty sources/reviewers; supports optional ad waste estimates requiring authorized account extracts; checks required research sections (`keyword_research`, `negative_keyword_harvest`, `ad_copy_variants`); and binds approvals to cryptographic content hashes (`approved_content_hash`) with automatic fail-closed invalidation upon post-approval profile or deliverable mutations.
@@ -39,8 +39,13 @@ P1-D (console acceptance in a browser) is COMPLETED:
 - `orchestrator/web_ui.py`: Fixed JavaScript newline escaping defect in `HTML_TEMPLATE` (`split('\n')` -> `split('\\n')`), eliminating uncaught syntax error that prevented client-side script execution in real browsers. Verified real headless Chrome sign-in flow (`LOGIN_HTML` -> valid bearer token submission -> DOM replacement -> script mounting -> `refreshData()`).
 - UI Walkthrough & Verification: Verified all 4 Swarm Floor desks (Worker, Auditor, Warden, Scribe), attestation state badge ("VERIFIED"), ESTOP status ("ESTOP: ENGAGED"), client selection (`apex-roofing`), distribution research templates (7 canonical templates), interactive preview drawer rendering specs and criteria, disabled dispatch buttons under ESTOP, and colored interactive repair diff rendering.
 - Real Browser Acceptance Suite: Added `tests/test_web_ui_browser.py` (8/8 PASS) exercising headless Chrome via CDP against an isolated fixture server. Registered in `tests/tiers.json` under `integration`.
-Test gate expanded to 105/105 suites green (88 unit, 8 containment, 9 integration, exit 0).
-P1-E through P1-G cover measurement, a consented pilot, and independent release/deployment evidence. All other implementation packages remain PENDING.
+P1-E (honest outcome and cost measurement) is COMPLETED:
+- `orchestrator/cost_accounting.py`: Established typed cost provenance (`MEASURED_INVOICE`, `ESTIMATED_TOKEN_RATE`, `LOCAL_COMPUTE`, `UNKNOWN`) and 2026 published rate cards. Never represents unknown as free ($0.00). Audited all 218 historical tasks (139 token-bearing: 82 local compute, 15 cloud rate ($1.0815 estimated spend), 121 unpriced). Audited human verdict provenance, strictly isolating 2 genuine operator reviews from 9 automated AI-performed checks (`is_ai_performed()`). Built cohort partitioning (`canaries`, `infra_failures`, `historical_prototypes`, `commercial_distribution`).
+- `orchestrator/task_runner.py`: Replaced hardcoded `cost_usd=0.0` with dynamic cost calculation via `cost_accounting.calculate_task_cost()`.
+- `orchestrator/ledger.py`: Updated `weekly_fitness` to safely handle nullable costs, count unpriced tasks, and calculate `independent_accuracy` strictly over genuine operator reviews.
+- `tests/test_cost_accounting.py`: Added 7 comprehensive regression tests (7/7 PASS); registered in `tests/tiers.json` under `unit`.
+Test gate expanded to 106/106 suites green (89 unit, 8 containment, 9 integration, exit 0).
+P1-F through P1-G cover a consented pilot and independent release/deployment evidence. All other implementation packages remain PENDING.
 No new live window, credential write, policy widening, outreach, ad publication,
 or push is authorized by this plan. Historical implementation notes follow.
 

@@ -808,7 +808,14 @@ def _record_outcome(context: _TaskContext, out: str, usage: dict,
     # F48: the arithmetic moved to scheduler.accumulated_tokens(), now shared with run_canaries().
     tok_in, tok_out = scheduler.accumulated_tokens(
         mission_usage, row.get("tokens_in"), row.get("tokens_out"))
-    ledger.finish_task(tid, artifacts=[str(dest.relative_to(rc.ROOT))], cost_usd=0.0,
+    import cost_accounting
+    task_cost = cost_accounting.calculate_task_cost(
+        worker_cfg.get("model") or row.get("model_used"),
+        tok_in,
+        tok_out,
+        raw_cost_usd=usage.get("cost_usd"),
+    )
+    ledger.finish_task(tid, artifacts=[str(dest.relative_to(rc.ROOT))], cost_usd=task_cost.cost_usd,
                        tokens_in=tok_in, tokens_out=tok_out,
                        critic_verdict=("needs_review" if verdict == "infra_failed" else verdict),
                        critic_notes=verdict_text[:500], status=status,
