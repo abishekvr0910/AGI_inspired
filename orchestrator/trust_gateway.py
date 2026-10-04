@@ -13,6 +13,7 @@ hardened trust kernel:
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import math
 import sqlite3
@@ -162,6 +163,8 @@ class Gateway:
 
         # Check candidate artifact files in priority order
         candidates = [
+            self.runs_dir / f"task{task_id}_deliverable.md",
+            self.runs_dir / f"task{task_id}_a3_worker_raw.txt",
             self.runs_dir / f"task{task_id}_a2_worker_raw.txt",
             self.runs_dir / f"task{task_id}_a1_worker_raw.txt",
             self.runs_dir / f"task{task_id}_worker_raw.txt",
@@ -199,6 +202,60 @@ class Gateway:
             "critic_verdict": status_info.get("critic_verdict"),
             "source_path": source_path,
             "deliverable": content,
+        }
+
+    def get_task_diff(self, task_id: int) -> dict[str, Any]:
+        """Compute interactive unified diff between initial attempt and final deliverable."""
+        a1_path = self.runs_dir / f"task{task_id}_a1_worker_raw.txt"
+        final_info = self.get_deliverable(task_id)
+        final_text = final_info.get("deliverable") or ""
+
+        # If a separate attempt 1 raw file exists, use it as baseline
+        text1 = ""
+        if a1_path.is_file():
+            try:
+                text1 = a1_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                text1 = ""
+
+        # If no separate a1 file, check if a2 exists
+        a2_path = self.runs_dir / f"task{task_id}_a2_worker_raw.txt"
+        if not text1 and a2_path.is_file():
+            legacy_p = self.runs_dir / f"task{task_id}_worker_raw.txt"
+            if legacy_p.is_file():
+                try:
+                    text1 = legacy_p.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    text1 = ""
+
+        if not text1 or not final_text or text1.strip() == final_text.strip():
+            return {
+                "task_id": task_id,
+                "has_diff": False,
+                "diff": "",
+                "added_lines": 0,
+                "removed_lines": 0,
+                "attempt_1_found": bool(text1),
+                "final_found": bool(final_text),
+            }
+
+        diff_lines = list(difflib.unified_diff(
+            text1.splitlines(keepends=True),
+            final_text.splitlines(keepends=True),
+            fromfile=f"task_{task_id}_attempt_1.md",
+            tofile=f"task_{task_id}_final_repaired.md",
+        ))
+        added = sum(1 for l in diff_lines if l.startswith("+") and not l.startswith("+++"))
+        removed = sum(1 for l in diff_lines if l.startswith("-") and not l.startswith("---"))
+
+        return {
+            "task_id": task_id,
+            "has_diff": bool(diff_lines),
+            "diff": "".join(diff_lines),
+            "added_lines": added,
+            "removed_lines": removed,
+            "attempt_1_found": True,
+            "final_found": True,
         }
 
     def get_attestation(self, task_id: int | None = None) -> dict[str, Any]:

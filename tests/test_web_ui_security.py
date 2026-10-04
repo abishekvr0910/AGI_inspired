@@ -20,8 +20,8 @@ class WebSecurityTests(unittest.TestCase):
             before = f.gw.policy_mgr.policy_path.read_bytes()
             sentinel = f.sentinel.read_bytes()
             routes = {
-                "GET": ("/", "/api/status", "/api/tasks", "/api/tasks/1", "/api/candidates", "/api/graph", "/api/clients", "/api/templates", "/api/clients/test-client/dossier", "/api/clients/test-client/export-csv", "/unknown"),
-                "POST": ("/api/dispatch", "/api/distribution/dispatch", "/api/clients", "/api/estop", "/api/candidates/approve", "/api/candidates/reject", "/unknown"),
+                "GET": ("/", "/api/status", "/api/tasks", "/api/tasks/1", "/api/tasks/1/diff", "/api/candidates", "/api/graph", "/api/clients", "/api/templates", "/api/clients/test-client/dossier", "/api/clients/test-client/export-csv", "/api/clients/test-client/download-dossier-html", "/api/clients/test-client/download-dossier-md", "/unknown"),
+                "POST": ("/api/dispatch", "/api/distribution/dispatch", "/api/clients", "/api/clients/test-client/compile-package", "/api/estop", "/api/candidates/approve", "/api/candidates/reject", "/unknown"),
             }
             with patch.object(f.gw.policy_mgr, "re_sign_attestation") as signer, patch.object(f.gw, "dispatch_task") as dispatch:
                 with self.assertLogs(web_ui.LOGGER, level="WARNING") as logs:

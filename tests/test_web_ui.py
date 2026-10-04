@@ -256,6 +256,87 @@ class WebConsoleTests(unittest.TestCase):
                     allowed = f.gw.policy_mgr.get_allowed_hosts()
                     self.assertIn("capterra-reviews.org", allowed)
 
+    def test_task_diff_and_dossier_download_endpoints(self):
+        """Test interactive repair diff API, HTML/MD dossier downloads, and package compilation."""
+        import client_profile
+        from pathlib import Path
+
+        sample_profile = {
+            "client_id": "test-contractor",
+            "display_name": "Test Contractor Pro",
+            "domain": "hvac austin",
+            "geo": ["US"],
+            "language": ["en"],
+            "offer": "Emergency commercial HVAC repair",
+            "audience": "Property managers",
+            "competitors": ["https://austin-hvac-pros.example"],
+            "brand_voice": "Reliable, licensed",
+            "landing_url": "https://test-contractor.example",
+            "seed_keywords": ["commercial hvac austin"],
+            "forbidden_claims": ["unlimited free repairs"],
+        }
+
+        with fixture(paused=False) as f, serving(f.gw) as server:
+            client_profile.save_client_profile(sample_profile, root=f.root)
+
+            # 1. Setup a task with attempt 1 raw file and repaired deliverable
+            tid = 42
+            with f.gw._conn() as db:
+                db.execute(
+                    "INSERT INTO tasks (task_id, spec, status, critic_verdict, tokens_in, tokens_out) "
+                    "VALUES (?, ?, 'completed', 'pass', 100, 200)",
+                    (tid, "fixture task"),
+                )
+                db.commit()
+            a1_file = f.gw.runs_dir / f"task{tid}_a1_worker_raw.txt"
+            deliv_file = f.gw.runs_dir / f"task{tid}_deliverable.md"
+            a1_file.write_text("# Attempt 1\nUnverified draft copy.\n", encoding="utf-8")
+            deliv_file.write_text("# Attempt 1\nVerified copy with citations.\nSecond paragraph added.\n", encoding="utf-8")
+
+            # GET /api/tasks/{tid}/diff
+            code, _, body = request(server, "GET", f"/api/tasks/{tid}/diff")
+            self.assertEqual(code, 200)
+            diff_res = json.loads(body)
+            self.assertEqual(diff_res["task_id"], tid)
+            self.assertTrue(diff_res["has_diff"])
+            self.assertGreater(diff_res["added_lines"], 0)
+            self.assertGreater(diff_res["removed_lines"], 0)
+            self.assertIn("+Verified copy with citations.", diff_res["diff"])
+
+            # Test task with no diff (e.g. non-existent attempt 1 or identical)
+            code, _, body = request(server, "GET", "/api/tasks/999/diff")
+            self.assertEqual(code, 200)
+            no_diff_res = json.loads(body)
+            self.assertFalse(no_diff_res["has_diff"])
+            self.assertEqual(no_diff_res["diff"], "")
+
+            # 2. GET /api/clients/test-contractor/download-dossier-html
+            code, headers, body = request(server, "GET", "/api/clients/test-contractor/download-dossier-html")
+            self.assertEqual(code, 200)
+            self.assertIn("text/html", headers["content-type"])
+            self.assertIn('attachment; filename="test-contractor_strategy_dossier.html"', headers["content-disposition"])
+            self.assertIn(b"<!doctype html>", body)
+            self.assertIn(b"Test Contractor Pro", body)
+
+            # 3. GET /api/clients/test-contractor/download-dossier-md
+            code, headers, body = request(server, "GET", "/api/clients/test-contractor/download-dossier-md")
+            self.assertEqual(code, 200)
+            self.assertIn("text/markdown", headers["content-type"])
+            self.assertIn('attachment; filename="test-contractor_strategy_dossier.md"', headers["content-disposition"])
+            self.assertIn(b"# Executive Strategy & Distribution Audit", body)
+
+            # 4. POST /api/clients/test-contractor/compile-package
+            code, _, body = request(server, "POST", "/api/clients/test-contractor/compile-package", {})
+            self.assertEqual(code, 200)
+            pkg_res = json.loads(body)
+            self.assertTrue(pkg_res["success"])
+            self.assertEqual(pkg_res["client_id"], "test-contractor")
+            self.assertEqual(pkg_res["display_name"], "Test Contractor Pro")
+            self.assertTrue(Path(pkg_res["csv_path"]).is_file())
+            self.assertTrue(Path(pkg_res["dossier_html_path"]).is_file())
+            self.assertTrue(Path(pkg_res["dossier_md_path"]).is_file())
+            self.assertIn("campaign_name", pkg_res["campaign_summary"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

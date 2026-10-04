@@ -442,8 +442,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <button onclick="closeDeliverableModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold">✕</button>
       </div>
 
-      <!-- Modal Body (Split view) -->
-      <div class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-800 p-4 gap-4 text-xs font-mono">
+      <!-- Navigation Tabs (Split View vs Interactive Repair Diff) -->
+      <div class="px-4 py-2 border-b border-slate-800 bg-slate-950/40 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <button id="modal-tab-split" onclick="switchModalView('split')" class="px-3 py-1 rounded-lg text-xs font-bold font-mono transition bg-cyan-950 text-cyan-300 border border-cyan-800/80">Split View</button>
+          <button id="modal-tab-diff" onclick="switchModalView('diff')" class="px-3 py-1 rounded-lg text-xs font-bold font-mono transition text-slate-400 hover:text-slate-200">Interactive Repair Diff <span id="modal-diff-badge" class="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400">No repair diff</span></button>
+        </div>
+        <div id="modal-diff-stats" class="text-xs font-mono text-slate-400 hidden">
+          <span class="text-emerald-400 font-bold" id="modal-diff-added">+0</span> lines / <span class="text-red-400 font-bold" id="modal-diff-removed">-0</span> lines
+        </div>
+      </div>
+
+      <!-- Modal Body 1: Split View -->
+      <div id="modal-view-split" class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-800 p-4 gap-4 text-xs font-mono">
         <!-- Left: Deliverable -->
         <div class="space-y-3">
           <div class="font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
@@ -462,6 +473,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <div id="modal-evidence-box" class="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
             <div class="text-slate-500 italic">Inspecting broker audit trails...</div>
           </div>
+        </div>
+      </div>
+
+      <!-- Modal Body 2: Interactive Repair Diff -->
+      <div id="modal-view-diff" class="hidden flex-1 overflow-y-auto p-4 text-xs font-mono space-y-3">
+        <div class="flex items-center justify-between font-bold text-slate-400 uppercase tracking-wider">
+          <span>Unified Diff (Attempt 1 Baseline vs Final Deliverable)</span>
+          <span class="text-cyan-400" id="modal-diff-status">Inspecting repair iterations...</span>
+        </div>
+        <div id="modal-diff-content" class="p-3.5 rounded-xl bg-slate-950 border border-slate-800/80 font-mono leading-relaxed max-h-[60vh] overflow-y-auto whitespace-pre">
         </div>
       </div>
 
@@ -675,7 +696,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }).join('');
     }
 
+    function switchModalView(view) {
+      const isSplit = view === 'split';
+      document.getElementById('modal-view-split').classList.toggle('hidden', !isSplit);
+      document.getElementById('modal-view-diff').classList.toggle('hidden', isSplit);
+      document.getElementById('modal-diff-stats').classList.toggle('hidden', isSplit);
+      document.getElementById('modal-tab-split').className = isSplit
+        ? 'px-3 py-1 rounded-lg text-xs font-bold font-mono transition bg-cyan-950 text-cyan-300 border border-cyan-800/80'
+        : 'px-3 py-1 rounded-lg text-xs font-bold font-mono transition text-slate-400 hover:text-slate-200';
+      document.getElementById('modal-tab-diff').className = !isSplit
+        ? 'px-3 py-1 rounded-lg text-xs font-bold font-mono transition bg-cyan-950 text-cyan-300 border border-cyan-800/80'
+        : 'px-3 py-1 rounded-lg text-xs font-bold font-mono transition text-slate-400 hover:text-slate-200';
+    }
+
     async function inspectTask(taskId) {
+      switchModalView('split');
+      const badge = document.getElementById('modal-diff-badge');
+      const diffStatus = document.getElementById('modal-diff-status');
+      const diffBox = document.getElementById('modal-diff-content');
+      badge.innerText = 'Inspecting...';
+      badge.className = 'ml-1 px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400';
+      diffStatus.innerText = 'Computing repair iterations...';
+      diffBox.innerHTML = '<div class="text-slate-500 italic p-3">Analyzing raw attempts and repair history...</div>';
+
       const data = await fetchAPI(`/api/tasks/${taskId}`);
       if (!data) return;
 
@@ -709,6 +752,35 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       document.getElementById('deliverable-modal').classList.remove('hidden');
       document.getElementById('deliverable-modal').classList.add('flex');
+
+      // Asynchronously fetch repair diff
+      const diffData = await fetchAPI(`/api/tasks/${taskId}/diff`);
+      if (diffData && diffData.has_diff) {
+        badge.innerText = `+${diffData.added_lines} / -${diffData.removed_lines}`;
+        badge.className = 'ml-1 px-1.5 py-0.5 rounded text-[10px] bg-cyan-900/60 text-cyan-300 border border-cyan-700/60';
+        document.getElementById('modal-diff-added').innerText = `+${diffData.added_lines}`;
+        document.getElementById('modal-diff-removed').innerText = `-${diffData.removed_lines}`;
+        diffStatus.innerText = `${diffData.added_lines} additions, ${diffData.removed_lines} deletions across repair cycles`;
+
+        const highlighted = (diffData.diff || '').split('\n').map(line => {
+          if (line.startsWith('+++') || line.startsWith('---')) {
+            return `<span class="text-slate-400 font-bold block px-1">${escapeHTML(line)}</span>`;
+          } else if (line.startsWith('+')) {
+            return `<span class="text-emerald-400 bg-emerald-950/40 block px-1">${escapeHTML(line)}</span>`;
+          } else if (line.startsWith('-')) {
+            return `<span class="text-red-400 bg-red-950/40 block px-1">${escapeHTML(line)}</span>`;
+          } else if (line.startsWith('@@')) {
+            return `<span class="text-cyan-400 font-bold bg-cyan-950/30 block px-1">${escapeHTML(line)}</span>`;
+          }
+          return `<span class="text-slate-400 block px-1">${escapeHTML(line)}</span>`;
+        }).join('');
+        diffBox.innerHTML = highlighted;
+      } else {
+        badge.innerText = 'No repair diff';
+        badge.className = 'ml-1 px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400';
+        diffStatus.innerText = 'Deliverable passed without repairs or no attempt 1 baseline found';
+        diffBox.innerHTML = '<div class="text-slate-500 italic p-3">Zero repair iterations recorded for this task. Deliverable either succeeded on initial attempt (Attempt 1) or no separate baseline diff was generated.</div>';
+      }
     }
 
     function closeDeliverableModal() {
@@ -918,17 +990,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       const summary = res.campaign_summary || {};
-      previewTitle.textContent = `CAMPAIGN COMPILED: ${res.display_name} (${clientId})`;
       previewContent.innerHTML = `
-        <div class="space-y-2">
-          <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between">
+        <div class="space-y-3">
+          <div class="p-3 rounded-lg bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-2">
             <div>
               <span class="text-emerald-400 font-bold">Campaign:</span> ${escapeHTML(summary.campaign_name || 'Standard')}
               <br><span class="text-slate-400">Ad Groups:</span> ${summary.ad_groups_count || 0} | <span class="text-slate-400">Keywords:</span> ${summary.total_keywords || 0} | <span class="text-slate-400">Negatives:</span> ${summary.total_negatives || 0}
             </div>
-            <a href="/api/clients/${encodeURIComponent(clientId)}/export-csv" target="_blank" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-black font-extrabold text-xs transition">Download Bulk CSV</a>
+            <div class="flex flex-wrap items-center gap-2">
+              <a href="/api/clients/${encodeURIComponent(clientId)}/export-csv" target="_blank" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-black font-extrabold text-xs transition">Bulk Ads CSV</a>
+              <a href="/api/clients/${encodeURIComponent(clientId)}/download-dossier-html" target="_blank" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-800/60 font-bold text-xs transition">Dark-Mode HTML</a>
+              <a href="/api/clients/${encodeURIComponent(clientId)}/download-dossier-md" target="_blank" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs transition">Markdown Dossier</a>
+            </div>
           </div>
-          <div class="font-bold text-cyan-400 mt-2">Executive Strategy Dossier:</div>
+          <div class="font-bold text-cyan-400">Executive Strategy Dossier Preview:</div>
           <div class="whitespace-pre-wrap text-slate-300 max-h-36 overflow-y-auto p-2 bg-slate-950 rounded border border-slate-800/80">${escapeHTML((res.dossier_markdown || '').substring(0, 1500))}...</div>
         </div>
       `;
@@ -1169,6 +1244,17 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
             self._send_json({"tasks": tasks})
             return
 
+        if path.startswith("/api/tasks/") and path.endswith("/diff"):
+            parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "tasks" and parts[3] == "diff":
+                try:
+                    tid = int(parts[2])
+                    diff_info = gw.get_task_diff(tid)
+                    self._send_json(diff_info)
+                except ValueError:
+                    self._send_json({"error": "invalid task id"}, status=400)
+                return
+
         if path.startswith("/api/tasks/"):
             tid_str = path.split("/api/tasks/", 1)[1]
             try:
@@ -1308,6 +1394,56 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Length", str(len(csv_bytes)))
                     self.end_headers()
                     self.wfile.write(csv_bytes)
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                return
+
+        if path.startswith("/api/clients/") and path.endswith("/download-dossier-html"):
+            parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "clients" and parts[3] == "download-dossier-html":
+                client_id = parts[2].strip()
+                root_path = _get_root_from_gateway(gw)
+                try:
+                    import client_reporter
+                    res = client_reporter.compile_and_export_client_package(
+                        client_id,
+                        root=root_path,
+                        db_path=gw.ledger_db,
+                        runs_dir=gw.runs_dir,
+                        force_export=True,
+                    )
+                    html_bytes = Path(res["dossier_html_path"]).read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Disposition", f'attachment; filename="{client_id}_strategy_dossier.html"')
+                    self.send_header("Content-Length", str(len(html_bytes)))
+                    self.end_headers()
+                    self.wfile.write(html_bytes)
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                return
+
+        if path.startswith("/api/clients/") and path.endswith("/download-dossier-md"):
+            parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "clients" and parts[3] == "download-dossier-md":
+                client_id = parts[2].strip()
+                root_path = _get_root_from_gateway(gw)
+                try:
+                    import client_reporter
+                    res = client_reporter.compile_and_export_client_package(
+                        client_id,
+                        root=root_path,
+                        db_path=gw.ledger_db,
+                        runs_dir=gw.runs_dir,
+                        force_export=True,
+                    )
+                    md_bytes = Path(res["dossier_md_path"]).read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                    self.send_header("Content-Disposition", f'attachment; filename="{client_id}_strategy_dossier.md"')
+                    self.send_header("Content-Length", str(len(md_bytes)))
+                    self.end_headers()
+                    self.wfile.write(md_bytes)
                 except Exception as exc:
                     self._send_json({"error": str(exc)}, status=400)
                 return
@@ -1513,6 +1649,35 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=400)
             return
+
+        if path.startswith("/api/clients/") and path.endswith("/compile-package"):
+            parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "clients" and parts[3] == "compile-package":
+                client_id = parts[2].strip()
+                root_path = _get_root_from_gateway(gw)
+                try:
+                    import client_reporter
+                    res = client_reporter.compile_and_export_client_package(
+                        client_id,
+                        root=root_path,
+                        db_path=gw.ledger_db,
+                        runs_dir=gw.runs_dir,
+                        force_export=True,
+                    )
+                    self._send_json({
+                        "success": True,
+                        "client_id": client_id,
+                        "display_name": res.get("display_name", client_id),
+                        "csv_path": res.get("csv_path"),
+                        "json_path": res.get("json_path"),
+                        "dossier_md_path": res.get("dossier_md_path"),
+                        "dossier_html_path": res.get("dossier_html_path"),
+                        "campaign_summary": res.get("campaign_summary"),
+                        "deliverables_found": res.get("deliverables_found"),
+                    })
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                return
 
         self._send_json({"error": "not found"}, status=404)
 

@@ -4,6 +4,19 @@
   "active_agents": [
     {
       "agent": "gemini-cli",
+      "role": "Principal Architect: Operational & Web Console Ergonomics (Campaign Package Compiler, Live Diffs, Dossier Hub)",
+      "task_id": "WEB-CONSOLE-ERGONOMICS-CAMPAIGNS-AND-DIFFS-2026-10-04",
+      "mode": "completed",
+      "owned_paths": [],
+      "started_at": "2026-10-04T05:22:00Z",
+      "last_update": "2026-10-04T05:35:00Z",
+      "status": "completed",
+      "blocked_by": null,
+      "handoff_path": null,
+      "notes": "COMPLETED: Landed Fix 4 (Operational & Web Console Ergonomics): One-click client package compiler (POST /api/clients/<id>/compile-package), Dark-Mode HTML and Markdown dossier downloads (GET /download-dossier-html, /download-dossier-md), interactive unified repair diff engine and endpoint (GET /api/tasks/<id>/diff), syntax-highlighted diff modal tab, and full client deliverable package actions. Verified 100/100 test suites green."
+    },
+    {
+      "agent": "gemini-cli",
       "role": "Principal Architect: Deep-Loop Research Autonomy (Bot-Block Evasion & Evidence Gating) & Egress Pivot",
       "task_id": "DEEP-LOOP-RESEARCH-AUTONOMY-AND-EGRESS-PIVOT-2026-10-04",
       "mode": "completed",
