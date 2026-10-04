@@ -8,7 +8,7 @@
 **Last Updated:** 2026-10-04 (All 4 Operational Bleeding Points Landed: Egress Harvesting & Source Pivoting, Deep-Loop Research Autonomy & Bot-Block Evasion, Linux & Cloud-Native Portability, Web Console Ergonomics & Live Repair Diffs; 101/101 model-free suites green; ESTOP strictly engaged)
 **Superseding Phase:** Master Release Synchronized; Egress Allowlist Harvesting & Pre-screened Safe Approvals Landed; Deep-Loop Research Autonomy Landed; Platform Sandbox Abstraction for Linux & Cloud-Native Secrets Landed; Web Console One-Click Campaign Compiler, Dossier Downloads & Interactive Repair Diffs Landed. All 101 test suites green; ESTOP strictly engaged.
 **Current Verification:** Full model-free gate `python -B tests/run_all.py` passed 101/101 suites (unit 86, containment 8, integration 7), exit 0. Targeted: platform sandbox 5/5, preflight 45/45, native worker 26/26, policy manager 58/58, web UI 4/4, web UI security 9/9, hypothesis deep loop 3/3, egress policy 11/11, typed decisions 38/38, evaluator 14/14, secrets 28/28 assertions, dependency integrity 7/7 assertions. Continuity revision 169 valid. No live API call, secret write, egress-policy edit, ESTOP transition, outreach, or push occurred.
-**Current Handoff:** `docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md`; canonical implementation handoff remains `docs/CODEX_HANDOFF_TYPESAFE_JEV_TRANSPORT_2026-09-30.md`.
+**Current Handoff:** `docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md`; canonical implementation handoff remains `docs/archive/handoffs/CODEX_HANDOFF_TYPESAFE_JEV_TRANSPORT_2026-09-30.md`.
 
 ## Current Landing (2026-10-04) — Operational Bleeding Points 1, 2, 3 & 4
 
