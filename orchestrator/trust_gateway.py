@@ -287,6 +287,10 @@ class Gateway:
         """Operator-gated rejection: record rejection in audit trail."""
         return self.policy_mgr.reject(domain, operator=operator, reason=reason)
 
+    def approve_safe_candidates(self, operator: str = "operator", min_count: int = 1) -> list[dict[str, Any]]:
+        """Pre-screen and batch-approve safe candidate domains."""
+        return self.policy_mgr.approve_safe_candidates(operator=operator, min_count=min_count)
+
 
 # ---------------------------------------------------------------------------
 # MCP Server Implementation (JSON-RPC 2.0 over stdio)

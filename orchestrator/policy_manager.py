@@ -175,6 +175,63 @@ def check_dns_liveness(
     }
 
 
+def record_candidate(
+    host: str,
+    url: str = "",
+    task_id: int | None = None,
+    attempt: int = 1,
+    runs_dir: Path | None = None,
+    policy_path: Path = DEFAULT_POLICY_PATH,
+) -> dict[str, Any] | None:
+    """Record an observed off-allowlist candidate domain for operator review.
+
+    Adheres strictly to fixture-segregation rules (A1).
+    """
+    normalized = normalize_hostname(host)
+    if not normalized:
+        return None
+
+    syntax = validate_hostname_syntax(normalized)
+    if not syntax["valid"]:
+        return None
+
+    # Check if host is already allowed
+    try:
+        if policy_path.is_file():
+            data = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                allowed = {normalize_hostname(h) for h in data.get("broker", {}).get("allowed_hosts", [])}
+                if normalized in allowed:
+                    return None
+    except Exception:
+        pass
+
+    runs = Path(runs_dir) if runs_dir is not None else (ROOT / "runs")
+    if os.environ.get("AGI_TEST_TIER"):
+        prod_runs = (ROOT / "runs").resolve()
+        if runs.resolve() == prod_runs:
+            # Prevent test fixture pollution
+            return None
+
+    log_file = runs / "policy_expansion_candidates.jsonl"
+    runs.mkdir(parents=True, exist_ok=True)
+
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "task_id": task_id,
+        "attempt": attempt,
+        "host": normalized,
+        "url": url,
+        "classification": "POLICY_DENIED",
+    }
+    try:
+        with log_file.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry) + "\n")
+        return entry
+    except OSError:
+        return None
+
+
 def _serialized(method):
     """Serialize governance transactions across manager instances in this process."""
     @wraps(method)
@@ -182,6 +239,7 @@ def _serialized(method):
         with self._mutation_lock:
             return method(self, *args, **kwargs)
     return locked
+
 
 
 class PolicyManager:
@@ -474,6 +532,96 @@ class PolicyManager:
 
         return audit_record
 
+    @_serialized
+    def approve_safe_candidates(
+        self,
+        operator: str = "operator",
+        min_count: int = 1,
+        resolve_dns: bool = True,
+        resolver: Callable[..., Any] | None = None,
+        dry_run: bool = False,
+        re_sign: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Pre-screen and batch-approve safe candidate domains.
+
+        A candidate is deemed safe to admit when:
+        1. Hostname syntax is valid per RFC 1035 / RFC 1123.
+        2. No risk indicators (not in high-risk TLDs, dynamic DNS providers, or excessive depth).
+        3. DNS resolvable with at least one IP address.
+        4. Zero SSRF risk (no private, loopback, link-local, or reserved IPs).
+        5. Observed frequency >= min_count.
+        """
+        proposals = self.propose(unreviewed_only=True, resolve_dns=resolve_dns, resolver=resolver)
+        safe_candidates: list[dict[str, Any]] = []
+
+        for p in proposals:
+            syntax = p.get("syntax", {})
+            dns_info = p.get("dns", {})
+            if not syntax.get("valid"):
+                continue
+            if syntax.get("risk_flags"):
+                continue
+            if not dns_info.get("resolvable"):
+                continue
+            if dns_info.get("ssrf_risk"):
+                continue
+            if p.get("count", 0) < min_count:
+                continue
+            safe_candidates.append(p)
+
+        if dry_run or not safe_candidates:
+            return safe_candidates
+
+        # Apply batch updates to egress policy YAML
+        data = self.load_policy_yaml()
+        broker = data.setdefault("broker", {})
+        allowed_list = list(broker.get("allowed_hosts") or [])
+        normalized_existing = {normalize_hostname(h) for h in allowed_list}
+
+        added_hosts: list[str] = []
+        for sc in safe_candidates:
+            h = sc["host"]
+            if h not in normalized_existing:
+                allowed_list.append(h)
+                normalized_existing.add(h)
+                added_hosts.append(h)
+
+        if added_hosts:
+            allowed_list.sort(key=lambda s: s.lower())
+            broker["allowed_hosts"] = allowed_list
+
+            tmp_path = self.policy_path.with_suffix(".tmp.yaml")
+            tmp_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+            tmp_path.replace(self.policy_path)
+
+        canonical_bytes = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        policy_digest = hashlib.sha256(canonical_bytes).hexdigest()
+
+        # Re-sign attestation token once for the entire batch
+        re_signed = False
+        if re_sign and added_hosts:
+            re_signed = self.re_sign_attestation()
+
+        # Append to audit ledger
+        self.approvals_path.parent.mkdir(parents=True, exist_ok=True)
+        audit_records: list[dict[str, Any]] = []
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self.approvals_path.open("a", encoding="utf-8") as handle:
+            for sc in safe_candidates:
+                rec = {
+                    "timestamp": now_iso,
+                    "action": "approve",
+                    "host": sc["host"],
+                    "operator": operator,
+                    "rationale": f"Pre-screened safe candidate (seen {sc['count']}x in tasks {sc.get('task_ids', [])})",
+                    "policy_digest": policy_digest,
+                    "re_signed": re_signed,
+                }
+                handle.write(json.dumps(rec, sort_keys=True) + "\n")
+                audit_records.append(rec)
+
+        return audit_records
+
 
 def main(argv: list[str] | None = None) -> int:
     """CLI dispatcher for policy management."""
@@ -496,6 +644,13 @@ def main(argv: list[str] | None = None) -> int:
     approve_p.add_argument("--operator", default=os.getenv("USERNAME", "operator"), help="Operator identifier")
     approve_p.add_argument("--rationale", default="", help="Safety rationale for approval")
     approve_p.add_argument("--no-attest", action="store_true", help="Skip attestation re-signing")
+
+    # Subcommand: approve-safe
+    approve_safe_p = subparsers.add_parser("approve-safe", help="Pre-screen and batch-approve safe candidate domains")
+    approve_safe_p.add_argument("--min-count", type=int, default=1, help="Minimum times seen before approving")
+    approve_safe_p.add_argument("--operator", default=os.getenv("USERNAME", "operator"), help="Operator identifier")
+    approve_safe_p.add_argument("--dry-run", action="store_true", help="Preview safe candidates without applying changes")
+    approve_safe_p.add_argument("--no-attest", action="store_true", help="Skip attestation re-signing")
 
     # Subcommand: reject
     reject_p = subparsers.add_parser("reject", help="Reject domain and record decision")
@@ -538,6 +693,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[SUCCESS] Approved {rec['host']} by {rec['operator']}")
         print(f"  Policy Digest: {rec['policy_digest']}")
         print(f"  Attestation Re-Signed: {rec['re_signed']}")
+        return 0
+
+    if args.command == "approve-safe":
+        approved = manager.approve_safe_candidates(
+            operator=args.operator,
+            min_count=args.min_count,
+            dry_run=args.dry_run,
+            re_sign=not args.no_attest,
+        )
+        mode = "[DRY-RUN]" if args.dry_run else "[APPROVED]"
+        print(f"\n{mode} Safe candidates processed: {len(approved)}")
+        for rec in approved:
+            h = rec.get("host") or rec.get("domain")
+            print(f"  + {h} (operator: {args.operator})")
         return 0
 
     if args.command == "reject":

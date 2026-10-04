@@ -5,12 +5,27 @@
 > are implemented. Deployment evidence remains required; no live execution is
 > authorized.
 
-**Last Updated:** 2026-10-02 (Gemini Deep-Loop Re-Search Upgrade, Egress Boundary Attestation, Production Readiness Audit; 99/99 model-free suites green; ESTOP strictly engaged)
-**Superseding Phase:** Deep-Loop Re-Search Upgrade & Egress Attestation Token Landed; Comprehensive Production Readiness Audit (6.5/10), Hermes 0.21.1 runtime attestation synchronization. All 99 test suites green; ESTOP strictly engaged.
-**Current Verification:** Full model-free gate `python -B tests/run_all.py` passed 99/99 suites (unit 84, containment 8, integration 7), exit 0. Targeted: preflight 45/45, native worker 23/23, egress policy 11/11, typed decisions 38/38, evaluator 14/14, secrets 28/28 assertions, dependency integrity 7/7 assertions. Continuity revision 165 valid. No live API call, secret write, egress-policy edit, ESTOP transition, outreach, or push occurred.
+**Last Updated:** 2026-10-04 (Gemini Deep-Loop Research Autonomy & Bot-Block Evasion, Candidate Egress Harvesting, Batch Safe Approvals & Source Pivoting; 100/100 model-free suites green; ESTOP strictly engaged)
+**Superseding Phase:** Master Release Synchronized; Deep-Loop Research Autonomy Landed across native worker & preflight; Candidate Egress Harvesting & Pre-screened Batch Approvals Landed in policy manager & web console; Adaptive Source Pivoting wired. All 100 test suites green; ESTOP strictly engaged.
+**Current Verification:** Full model-free gate `python -B tests/run_all.py` passed 100/100 suites (unit 85, containment 8, integration 7), exit 0. Targeted: preflight 45/45, native worker 26/26, policy manager 58/58, web UI 3/3, hypothesis deep loop 3/3, egress policy 11/11, typed decisions 38/38, evaluator 14/14, secrets 28/28 assertions, dependency integrity 7/7 assertions. Continuity revision 168 valid. No live API call, secret write, egress-policy edit, ESTOP transition, outreach, or push occurred.
 **Current Handoff:** `docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md`; canonical implementation handoff remains `docs/CODEX_HANDOFF_TYPESAFE_JEV_TRANSPORT_2026-09-30.md`.
 
-## Current Landing (2026-10-02) — Deep-Loop Re-Search Upgrade & Egress Boundary Attestation
+## Current Landing (2026-10-04) — Deep-Loop Research Autonomy (Fix 2) & Egress Harvesting / Source Pivoting (Fix 1)
+
+1. **Deep-Loop Research Autonomy & Bot-Block Evasion (Fix 2):**
+   - In `orchestrator/native_worker.py`: Added `detect_access_block(status, text, title)` and anti-bot challenge signatures (`BOT_BLOCK_SIGNATURES`: Cloudflare, CAPTCHA, PerimeterX, DDoS-GUARD, HTTP 403/429/503).
+   - In `execute_web_fetch()` & `execute_browser_extract()`: Detect access blocks and return `blocked: True` along with actionable `pivot_guidance` directing the model away from dead-end re-fetches toward third-party reviews, directories, and news coverage.
+   - Multi-Turn Evidence Gating: In `run_native_research_turn()`, intercepted text completion when attempted fetches were blocked or failed (`verified_count == 0`), injecting directives instructing the model to formulate alternative search queries.
+   - Tests: Expanded `tests/test_native_worker.py` to 26/26 tests covering bot-block detection, pivot guidance, and multi-turn research interception.
+
+2. **Egress Allowlist Friction & Source Pivoting (Fix 1):**
+   - In `orchestrator/policy_manager.py`: Added `record_candidate(...)` with RFC hostname syntax validation and test-tier fixture-segregation guards to prevent polluting production runs. Added `approve_safe_candidates(...)` and `approve-safe` CLI command to pre-screen candidates (RFC syntax, public DNS resolution, anti-SSRF address verification, risk heuristics) and batch-approve safe domains with atomic `egress_policy.yaml` update and attestation re-signing.
+   - In `orchestrator/native_worker.py`: Integrated candidate domain harvesting on failed/blocked fetches during research turns.
+   - In `orchestrator/deliverable_preflight.py`: Added policy denial bounds exceeded to `requires_active_research()` and enhanced `format_repair_feedback()` with explicit adaptive source pivoting guidance (recommending official documentation, SEC filings, GitHub, and approved directories).
+   - In `orchestrator/trust_gateway.py` & `orchestrator/web_ui.py`: Added `approve_safe_candidates` method to `Gateway`, added `/api/candidates/approve-safe` POST endpoint, and added `Approve All Safe Candidates` button in the Web Console Policy Governance portal.
+   - Tests: Expanded `tests/test_policy_manager.py` to 58/58 tests and `tests/test_web_ui.py` to 3/3 tests.
+
+3. **Gate Status:** 100/100 suites green (85 unit, 8 containment, 7 integration) exit 0; ESTOP strictly engaged (`True`).
 
 1. **Deep-Loop Re-Search Architecture Upgrade:** Solved the "one-shot repair amnesia" bottleneck diagnosed in the empirical ablation study (Tasks 216–222).
    - In `orchestrator/deliverable_preflight.py`: Added `requires_active_research(report)` and updated `build_repair_prompt(...)` to inject an explicit mandatory re-search directive banner.

@@ -466,7 +466,13 @@ def format_repair_feedback(
     if has_fabrication:
         lines.append("- For Fabrication / Un-attempted URLs: You MUST remove all quotation marks (including double quotes \"\", curly quotes “”, single quotes '', and blockquotes >) around any text citing sources that were policy-denied, un-attempted, or search snippets. Express the facts entirely in your own words without quotation marks, or remove the un-attempted URL citations.")
     if has_policy_bounds:
-        lines.append("- For Policy Denial bounds: You MUST cite at most 2 policy-denied / aggregator sources. Remove extraneous aggregator links to satisfy the <=25% and <=2 policy denial ceiling.")
+        lines.append(
+            "- For Policy Denial bounds: You cited sources on domains not permitted by the egress allowlist. "
+            "You MUST either: (1) Pivot to alternative permitted sources by searching for company homepages, "
+            "official documentation, GitHub repositories, SEC filings, or approved news/directory sources, OR "
+            "(2) cite at most 2 policy-denied sources without verbatim quotes and with confidence 1, "
+            "satisfying the <=25% and <=2 policy denial ceiling while ensuring at least 2 OK verified sources."
+        )
     if has_insufficient_sources:
         n, m = 0, 2
         for s in schema_issues:
@@ -516,6 +522,7 @@ def requires_active_research(report: PreflightReport) -> bool:
             or "insufficient source count" in issue_lower
             or "un-attempted" in issue_lower
             or "dead citation" in issue_lower
+            or "policy denial bounds exceeded" in issue_lower
         ):
             return True
     return False

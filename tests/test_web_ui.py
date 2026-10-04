@@ -220,6 +220,42 @@ class WebConsoleTests(unittest.TestCase):
             self.assertEqual(code, 400)
             self.assertIn("ESTOP engaged", json.loads(body)["error"])
 
+    def test_candidate_approval_and_approve_safe(self):
+        """Test one-click approve-safe batch admission endpoint in web console."""
+        from unittest.mock import patch
+        with fixture(paused=False) as f, serving(f.gw) as server:
+            # Seed candidates JSONL
+            c_file = f.gw.policy_mgr.candidates_path
+            c_file.parent.mkdir(parents=True, exist_ok=True)
+            candidate_entry = {
+                "timestamp": "2026-10-04T05:00:00Z",
+                "task_id": 105,
+                "host": "capterra-reviews.org",
+                "url": "https://capterra-reviews.org/pricing",
+            }
+            c_file.write_text(json.dumps(candidate_entry) + "\n", encoding="utf-8")
+
+            # Mock DNS resolver for safe check
+            import socket
+            def mock_res(host, port, proto=socket.IPPROTO_TCP):
+                return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
+
+            with patch("policy_manager.check_dns_liveness", return_value={"resolvable": True, "ips": ["93.184.216.34"], "ssrf_risk": False, "error": None}):
+                with patch.object(f.gw.policy_mgr, "re_sign_attestation", return_value=True):
+                    code, _, body = request(server, "POST", "/api/candidates/approve-safe", {
+                        "operator": "test_web_admin",
+                        "min_count": 1,
+                    })
+                    self.assertEqual(code, 200)
+                    res = json.loads(body)
+                    self.assertTrue(res["success"])
+                    self.assertEqual(res["count"], 1)
+                    self.assertEqual(res["approved"][0]["host"], "capterra-reviews.org")
+
+                    # Assert host is now in allowed hosts
+                    allowed = f.gw.policy_mgr.get_allowed_hosts()
+                    self.assertIn("capterra-reviews.org", allowed)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

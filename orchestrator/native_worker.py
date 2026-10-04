@@ -139,6 +139,37 @@ def execute_web_search(query: str, limit: int = 5, proxy: str | None = None) -> 
     return results
 
 
+BOT_BLOCK_SIGNATURES = (
+    "just a moment...",
+    "attention required! | cloudflare",
+    "cf-browser-verification",
+    "checking your browser before accessing",
+    "please verify you are a human",
+    "verify you are human",
+    "access denied | cloudflare",
+    "security check to access",
+    "enable javascript and cookies to continue",
+    "blocked by perimeterx",
+    "bot detection",
+    "request blocked",
+    "automated access",
+    "ddos-guard",
+)
+
+
+def detect_access_block(status: int, text: str = "", title: str = "") -> tuple[bool, str]:
+    """Detect HTTP access errors or anti-bot challenge signatures."""
+    if status in (403, 429, 503):
+        return True, f"HTTP {status}"
+    if status >= 400:
+        return True, f"HTTP {status}"
+    sample = (title + " " + text[:1500]).lower()
+    for sig in BOT_BLOCK_SIGNATURES:
+        if sig in sample:
+            return True, f"bot_challenge_detected ({sig})"
+    return False, ""
+
+
 def execute_web_fetch(url: str, char_limit: int = DEFAULT_CHAR_LIMIT, proxy: str | None = None) -> dict[str, Any]:
     """Fetch and extract visible text from a URL under strict bounds and proxy routing."""
     clean_url = safe_url(url)
@@ -181,8 +212,23 @@ def execute_web_fetch(url: str, char_limit: int = DEFAULT_CHAR_LIMIT, proxy: str
         return {"url": current, "title": "", "content": "", "status": 504, "error": "No response received"}
 
     status = response.status_code
-    if status >= 400:
-        return {"url": current, "title": "", "content": "", "status": status, "error": f"HTTP {status}"}
+    is_blocked, block_reason = detect_access_block(status)
+    if is_blocked:
+        return {
+            "url": current,
+            "title": "",
+            "content": "",
+            "status": status,
+            "bytes_read": 0,
+            "error": f"Access blocked: {block_reason}",
+            "blocked": True,
+            "pivot_guidance": (
+                f"Target URL {current} returned {block_reason}. "
+                "DO NOT attempt to re-fetch this exact URL. Formulate alternative web_search queries "
+                "targeting third-party reviews, news coverage, directory profiles (G2, Capterra, GitHub, SEC filings), "
+                "or competitor comparisons."
+            ),
+        }
 
     body = bytearray()
     for chunk in response.iter_content(64 * 1024):
@@ -203,6 +249,24 @@ def execute_web_fetch(url: str, char_limit: int = DEFAULT_CHAR_LIMIT, proxy: str
     parser.feed(raw_text)
     text = parser.text()
 
+    is_bot, bot_reason = detect_access_block(status, text, title)
+    if is_bot:
+        return {
+            "url": current,
+            "title": title,
+            "content": "",
+            "status": 403,
+            "bytes_read": len(body),
+            "error": f"Access blocked: {bot_reason}",
+            "blocked": True,
+            "pivot_guidance": (
+                f"Target URL {current} presented an anti-bot verification challenge ({bot_reason}). "
+                "DO NOT attempt to re-fetch this exact URL. Formulate alternative web_search queries "
+                "targeting third-party reviews, news coverage, directory profiles (G2, Capterra, GitHub, SEC filings), "
+                "or competitor comparisons."
+            ),
+        }
+
     if len(text) > char_limit:
         head = char_limit * 2 // 3
         tail = char_limit - head
@@ -215,6 +279,7 @@ def execute_web_fetch(url: str, char_limit: int = DEFAULT_CHAR_LIMIT, proxy: str
         "status": status,
         "bytes_read": len(body),
         "error": "",
+        "blocked": False,
     }
 
 
@@ -344,7 +409,25 @@ def execute_browser_extract(url: str, selector: str = "body") -> dict[str, Any]:
             # Extract text content from HTML (simple extraction)
             soup = BeautifulSoup(outer_html, "html.parser")
             text = soup.get_text(separator="\n", strip=True)
-            
+
+            is_bot, bot_reason = detect_access_block(200, text, title)
+            if is_bot:
+                return {
+                    "url": url,
+                    "title": title,
+                    "content": "",
+                    "status": 403,
+                    "bytes_read": len(text),
+                    "error": f"Access blocked: {bot_reason}",
+                    "blocked": True,
+                    "pivot_guidance": (
+                        f"Target URL {url} presented an anti-bot verification challenge ({bot_reason}). "
+                        "DO NOT attempt to re-fetch this exact URL. Formulate alternative web_search queries "
+                        "targeting third-party reviews, news coverage, directory profiles (G2, Capterra, GitHub, SEC filings), "
+                        "or competitor comparisons."
+                    ),
+                }
+
             return {
                 "url": url,
                 "title": title,
@@ -352,6 +435,7 @@ def execute_browser_extract(url: str, selector: str = "body") -> dict[str, Any]:
                 "status": 200,
                 "bytes_read": len(text),
                 "error": "",
+                "blocked": False,
             }
 
     # Run async function
@@ -676,6 +760,9 @@ def run_native_research_turn(
         tool_calls = msg.get("tool_calls", [])
 
         if not tool_calls:
+            failed_fetches = [e for e in fetched_evidence if e.get("classification") != "OK"]
+            verified_fetches = [e for e in fetched_evidence if e.get("classification") == "OK"]
+
             if enforce_active_research and tool_calls_executed == 0 and turn_idx == 0:
                 # Model attempted zero-tool completion under mandatory active research mandate:
                 # Re-prompt model to execute retrieval tools before drafting deliverable.
@@ -689,6 +776,23 @@ def run_native_research_turn(
                     )
                 })
                 continue
+            elif enforce_active_research and failed_fetches and not verified_fetches and turn_idx < max_turns - 1:
+                # Model attempted tool fetches, but all were blocked or failed.
+                # Do NOT allow shallow one-shot completion; force model to re-plan alternative queries.
+                blocked_urls = ", ".join(e["url"] for e in failed_fetches)
+                messages.append(msg)
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        f"INSUFFICIENT VERIFIED EVIDENCE: All attempted URL fetches failed or were blocked ({blocked_urls}). "
+                        "You must NOT draft a deliverable without verified evidence. "
+                        "DO NOT retry the blocked URLs. Formulate an alternative web_search query targeting third-party reviews, "
+                        "news coverage, directory profiles, or competitor comparisons, then fetch those working sources. "
+                        "Execute your alternative search tool call now."
+                    )
+                })
+                continue
+
             # Final completion text reached
             deliverable = str(msg.get("content") or "")
             break
@@ -721,13 +825,26 @@ def run_native_research_turn(
                 try:
                     res_data = json.loads(result_str)
                     st = res_data.get("status", 200)
+                    is_err = st >= 400 or bool(res_data.get("blocked"))
                     fetched_evidence.append({
                         "url": args["url"],
-                        "http_status": st,
-                        "classification": "OK" if st < 400 else "ERROR",
-                        "reachable_on_host": st < 400,
+                        "http_status": 403 if res_data.get("blocked") and st < 400 else st,
+                        "classification": "ERROR" if is_err else "OK",
+                        "reachable_on_host": not is_err,
                         "worker_policy_permitted": True,
                     })
+                    if is_err:
+                        import policy_manager
+                        r_dir = Path(usage_path).parent if usage_path else (Path(notebook_path).parent if notebook_path else None)
+                        target_host = urlsplit(args["url"]).hostname or ""
+                        if target_host:
+                            policy_manager.record_candidate(
+                                host=target_host,
+                                url=args["url"],
+                                task_id=task_id,
+                                attempt=1,
+                                runs_dir=r_dir,
+                            )
                 except Exception:
                     pass
 
@@ -746,9 +863,15 @@ def run_native_research_turn(
 
     # Update research notebook if path provided
     if notebook and notebook_path and fetched_evidence:
+        ok_evidence = [e for e in fetched_evidence if e.get("classification") == "OK"]
+        dead_evidence = [
+            {"url": e["url"], "http_status": e.get("http_status", 400)}
+            for e in fetched_evidence
+            if e.get("classification") != "OK"
+        ]
         notebook.merge_preflight(
-            evidence=fetched_evidence,
-            dead_urls=[e["url"] for e in fetched_evidence if e.get("http_status", 200) >= 400],
+            evidence=ok_evidence,
+            dead_urls=dead_evidence,
             schema_issues=[],
             task_id=task_id or 0,
             attempt=1,

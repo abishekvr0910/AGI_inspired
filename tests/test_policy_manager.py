@@ -6,11 +6,13 @@ summarization, propose workflow, approve/reject lifecycle, and CLI commands.
 from __future__ import annotations
 
 import json
+import os
 import socket
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "orchestrator"))
@@ -234,6 +236,127 @@ with tempfile.TemporaryDirectory() as tmpdir:
     code_rej = policy_manager.main(base_args + ["reject", "badsite.com", "--reason", "Dangerous"])
     check("CLI reject returns 0", code_rej == 0)
 
+# ---------------------------------------------------------------------------
+# Test 6: Candidate Domain Recording & Fixture Segregation Guard
+# ---------------------------------------------------------------------------
+print("\n[6] Testing Candidate Recording & Fixture Segregation...")
+with tempfile.TemporaryDirectory() as tmpdir:
+    t_root = Path(tmpdir)
+    p_file = t_root / "policy.yaml"
+    runs_tmp = t_root / "runs"
+    p_file.write_text(json.dumps(initial_policy_content), encoding="utf-8")
+
+    # Record valid candidate
+    rec = policy_manager.record_candidate(
+        host="new-research-lead.org",
+        url="https://new-research-lead.org/pricing",
+        task_id=101,
+        attempt=1,
+        runs_dir=runs_tmp,
+        policy_path=p_file,
+    )
+    check("record_candidate records valid candidate", rec is not None and rec["host"] == "new-research-lead.org")
+    c_log = runs_tmp / "policy_expansion_candidates.jsonl"
+    check("candidate written to jsonl", c_log.is_file())
+    lines = [json.loads(line) for line in c_log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    check("jsonl content matches", len(lines) == 1 and lines[0]["host"] == "new-research-lead.org")
+
+    # Record already-allowed host is skipped
+    rec_allowed = policy_manager.record_candidate(
+        host="alpha.com",
+        url="https://alpha.com/docs",
+        runs_dir=runs_tmp,
+        policy_path=p_file,
+    )
+    check("already-allowed host is skipped", rec_allowed is None)
+
+    # Record invalid syntax host is skipped
+    rec_invalid = policy_manager.record_candidate(
+        host="invalid..host",
+        runs_dir=runs_tmp,
+        policy_path=p_file,
+    )
+    check("invalid syntax host is skipped", rec_invalid is None)
+
+    # Fixture-segregation guard check
+    with patch.dict(os.environ, {"AGI_TEST_TIER": "unit"}):
+        prod_runs = (ROOT / "runs").resolve()
+        rec_guard = policy_manager.record_candidate(
+            host="dangerous-polluter.com",
+            runs_dir=prod_runs,
+            policy_path=p_file,
+        )
+        check("fixture-segregation prevents polluting prod runs", rec_guard is None)
+
+# ---------------------------------------------------------------------------
+# Test 7: Batch Pre-Screening & Approve-Safe (Method & CLI)
+# ---------------------------------------------------------------------------
+print("\n[7] Testing Batch Pre-Screening & Approve-Safe...")
+with tempfile.TemporaryDirectory() as tmpdir:
+    t_root = Path(tmpdir)
+    p_file = t_root / "safe_policy.yaml"
+    c_file = t_root / "safe_candidates.jsonl"
+    a_file = t_root / "safe_approvals.audit.jsonl"
+
+    p_file.write_text(json.dumps(initial_policy_content), encoding="utf-8")
+    mgr_safe = policy_manager.PolicyManager(
+        policy_path=p_file,
+        candidates_path=c_file,
+        approvals_path=a_file,
+        re_sign_runner=lambda: True,
+    )
+
+    # Seed candidates: safe vs risky
+    candidates_data = [
+        {"timestamp": "2026-10-04T05:00:00Z", "task_id": 201, "host": "safe-capterra-review.org"},
+        {"timestamp": "2026-10-04T05:01:00Z", "task_id": 202, "host": "dangerous-tld.zip"},
+        {"timestamp": "2026-10-04T05:02:00Z", "task_id": 203, "host": "internal-service.localho.st"},
+    ]
+    with c_file.open("w", encoding="utf-8") as f:
+        for c in candidates_data:
+            f.write(json.dumps(c) + "\n")
+
+    def mock_safe_resolver(host, port, proto=socket.IPPROTO_TCP):
+        if host == "safe-capterra-review.org":
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
+        if host == "dangerous-tld.zip":
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.1", 443))]
+        if "localho.st" in host:
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 443))]
+        raise socket.gaierror(-2, "Name or service not known")
+
+    # Dry-run test: returns safe candidates without modifying policy
+    dry_approved = mgr_safe.approve_safe_candidates(
+        operator="test_operator",
+        resolver=mock_safe_resolver,
+        dry_run=True,
+    )
+    check("dry-run returns safe candidate", len(dry_approved) == 1 and dry_approved[0]["host"] == "safe-capterra-review.org")
+    check("dry-run did not modify allowed_hosts", "safe-capterra-review.org" not in mgr_safe.get_allowed_hosts())
+
+    # Live approve-safe batch execution
+    approved = mgr_safe.approve_safe_candidates(
+        operator="test_operator",
+        resolver=mock_safe_resolver,
+        dry_run=False,
+    )
+    check("approve_safe_candidates approved exactly 1 safe candidate", len(approved) == 1)
+    check("approved candidate host matches", approved[0]["host"] == "safe-capterra-review.org")
+    check("safe-capterra-review.org now in allowed_hosts", "safe-capterra-review.org" in mgr_safe.get_allowed_hosts())
+    check("dangerous-tld.zip not in allowed_hosts", "dangerous-tld.zip" not in mgr_safe.get_allowed_hosts())
+    check("internal-service.localho.st not in allowed_hosts", "internal-service.localho.st" not in mgr_safe.get_allowed_hosts())
+
+    # Verify audit history
+    audit_history = mgr_safe.get_approval_history()
+    check("audit history recorded approve-safe record", len(audit_history) == 1 and audit_history[0]["host"] == "safe-capterra-review.org")
+    check("rationale indicates pre-screened safe", "Pre-screened safe candidate" in audit_history[0]["rationale"])
+
+    # Test CLI approve-safe subcommand
+    base_args = ["--policy", str(p_file), "--candidates", str(c_file), "--approvals", str(a_file)]
+    code_safe_cli = policy_manager.main(base_args + ["approve-safe", "--dry-run", "--no-attest"])
+    check("CLI approve-safe --dry-run returns 0", code_safe_cli == 0)
+
 print(f"\n{checks - len(failures)}/{checks} checks passed")
 if failures:
     raise SystemExit("FAILURES: " + ", ".join(failures))
+

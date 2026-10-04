@@ -585,8 +585,194 @@ class NativeWorkerTests(unittest.TestCase):
             self.assertEqual(deliv, "Immediate text without tools.")
             self.assertEqual(usage["tool_calls_executed"], 0)
 
+    def test_detect_access_block(self):
+        """detect_access_block flags HTTP status errors and anti-bot challenge signatures."""
+        # HTTP status checks
+        self.assertEqual(native_worker.detect_access_block(403), (True, "HTTP 403"))
+        self.assertEqual(native_worker.detect_access_block(429), (True, "HTTP 429"))
+        self.assertEqual(native_worker.detect_access_block(503), (True, "HTTP 503"))
+        self.assertEqual(native_worker.detect_access_block(500), (True, "HTTP 500"))
+
+        # Bot challenge in title / body with status 200
+        is_bot, reason = native_worker.detect_access_block(200, "Please verify you are a human before accessing.", "Verification Required")
+        self.assertTrue(is_bot)
+        self.assertIn("bot_challenge_detected", reason)
+
+        is_cf, _ = native_worker.detect_access_block(200, "Checking your browser before accessing", "Attention Required! | Cloudflare")
+        self.assertTrue(is_cf)
+
+        # Clean content
+        is_clean, reason_clean = native_worker.detect_access_block(200, "Welcome to our commercial roofing services page.", "Apex Roofing")
+        self.assertFalse(is_clean)
+        self.assertEqual(reason_clean, "")
+
+    def test_execute_web_fetch_bot_block_detection(self):
+        """execute_web_fetch detects 403s and bot challenge signatures, returning pivot guidance."""
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_response.is_redirect = False
+        mock_response.is_permanent_redirect = False
+
+        with patch("requests.Session.get", return_value=mock_response):
+            res = native_worker.execute_web_fetch("https://cloudflare-protected.example/data")
+            self.assertEqual(res["status"], 403)
+            self.assertTrue(res["blocked"])
+            self.assertIn("Access blocked: HTTP 403", res["error"])
+            self.assertIn("DO NOT attempt to re-fetch this exact URL", res["pivot_guidance"])
+            self.assertIn("Formulate alternative web_search queries", res["pivot_guidance"])
+
+        # Status 200 but bot challenge in HTML body
+        mock_200_cf = MagicMock()
+        mock_200_cf.status_code = 200
+        mock_200_cf.is_redirect = False
+        mock_200_cf.is_permanent_redirect = False
+        mock_200_cf.encoding = "utf-8"
+        mock_200_cf.headers = {"content-type": "text/html"}
+        cf_body = b"<html><head><title>Just a moment...</title></head><body>Enable JavaScript and cookies to continue.</body></html>"
+        mock_200_cf.iter_content.return_value = [cf_body]
+
+        with patch("requests.Session.get", return_value=mock_200_cf):
+            res_cf = native_worker.execute_web_fetch("https://challenge.example/login")
+            self.assertEqual(res_cf["status"], 403)
+            self.assertTrue(res_cf["blocked"])
+            self.assertIn("anti-bot verification challenge", res_cf["pivot_guidance"])
+
+    def test_native_research_turn_bot_block_interception_and_pivot(self):
+        """Multi-turn loop intercepts text generation when fetches fail and forces search pivot."""
+        received_messages = []
+
+        def mock_turn_caller(messages, tools):
+            received_messages.append(list(messages))
+            t = len(received_messages)
+            if t == 1:
+                # Turn 0: Model attempts to fetch protected target URL
+                return {
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [{
+                            "id": "call_f1",
+                            "type": "function",
+                            "function": {"name": "web_fetch", "arguments": json.dumps({"url": "https://protected-vendor.example/pricing"})}
+                        }]
+                    },
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                }
+            elif t == 2:
+                # Turn 1: Model receives 403 error and prematurely attempts to draft text from memory
+                return {
+                    "message": {
+                        "role": "assistant",
+                        "content": "Protected vendor was blocked, but I guess pricing is $50/mo based on memory.",
+                    },
+                    "input_tokens": 150,
+                    "output_tokens": 30,
+                }
+            elif t == 3:
+                # Turn 2: Intercepted by multi-turn evidence gate! Model pivots to alternative web_search
+                return {
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [{
+                            "id": "call_s1",
+                            "type": "function",
+                            "function": {"name": "web_search", "arguments": json.dumps({"query": "protected vendor pricing reviews directory"})}
+                        }]
+                    },
+                    "input_tokens": 200,
+                    "output_tokens": 25,
+                }
+            elif t == 4:
+                # Turn 3: Model fetches third-party review URL discovered from search
+                return {
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [{
+                            "id": "call_f2",
+                            "type": "function",
+                            "function": {"name": "web_fetch", "arguments": json.dumps({"url": "https://software-reviews.example/vendor"})}
+                        }]
+                    },
+                    "input_tokens": 260,
+                    "output_tokens": 25,
+                }
+            else:
+                # Turn 4: Model completes with verified third-party source
+                return {
+                    "message": {
+                        "role": "assistant",
+                        "content": (
+                            "# Vendor Pricing Analysis\n\n"
+                            "Verified pricing tier is $49/mo according to https://software-reviews.example/vendor."
+                        ),
+                    },
+                    "input_tokens": 320,
+                    "output_tokens": 50,
+                }
+
+        with tempfile.TemporaryDirectory() as td:
+            temp_root = Path(td)
+            nb_path = temp_root / "test_notebook.json"
+            nb = Notebook()
+            nb.save(nb_path)
+
+            def mock_fetch(url, **kw):
+                if "protected-vendor" in url:
+                    return {
+                        "url": url,
+                        "title": "Access Denied",
+                        "content": "",
+                        "status": 403,
+                        "blocked": True,
+                        "error": "Access blocked: HTTP 403",
+                        "pivot_guidance": "DO NOT retry. Formulate alternative web_search queries."
+                    }
+                return {
+                    "url": url,
+                    "title": "Software Reviews",
+                    "content": "Verified vendor pricing is $49/mo.",
+                    "status": 200,
+                    "blocked": False,
+                    "error": ""
+                }
+
+            with patch("native_worker.execute_web_fetch", side_effect=mock_fetch):
+                with patch("native_worker.execute_web_search", return_value=[{"title": "Review", "url": "https://software-reviews.example/vendor"}]):
+                    with patch("native_worker.pause_engaged", return_value=False):
+                        deliverable, usage = native_worker.run_native_research_turn(
+                            prompt="Research pricing for protected vendor.",
+                            model_cfg={"provider": "mock"},
+                            custom_caller=mock_turn_caller,
+                            notebook_path=nb_path,
+                            task_id=99,
+                            enforce_active_research=True,
+                        )
+
+            # Assert 5 turns occurred (fetch blocked -> intercepted -> search -> working fetch -> completion)
+            self.assertEqual(len(received_messages), 5)
+            # Verify turn 2 received the evidence gate directive
+            turn2_user_msgs = [m for m in received_messages[2] if m.get("role") == "user"]
+            self.assertTrue(any("INSUFFICIENT VERIFIED EVIDENCE" in m["content"] for m in turn2_user_msgs))
+            self.assertTrue(any("https://protected-vendor.example/pricing" in m["content"] for m in turn2_user_msgs))
+
+            # Deliverable grounded in verified source
+            self.assertIn("https://software-reviews.example/vendor", deliverable)
+            self.assertEqual(usage["tool_calls_executed"], 3)
+
+            # Verify notebook recording
+            updated_nb = Notebook.load(nb_path)
+            self.assertIsNotNone(updated_nb)
+            self.assertEqual(len(updated_nb.verified_sources), 1)
+            self.assertEqual(updated_nb.verified_sources[0].url, "https://software-reviews.example/vendor")
+            self.assertEqual(len(updated_nb.dead_sources), 1)
+            self.assertEqual(updated_nb.dead_sources[0].url, "https://protected-vendor.example/pricing")
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

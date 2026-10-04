@@ -1,7 +1,20 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-10-02T16:21:00Z",
+  "last_updated": "2026-10-04T05:03:00Z",
   "active_agents": [
+    {
+      "agent": "gemini-cli",
+      "role": "Principal Architect: Deep-Loop Research Autonomy (Bot-Block Evasion & Evidence Gating) & Egress Pivot",
+      "task_id": "DEEP-LOOP-RESEARCH-AUTONOMY-AND-EGRESS-PIVOT-2026-10-04",
+      "mode": "completed",
+      "owned_paths": [],
+      "started_at": "2026-10-04T05:03:00Z",
+      "last_update": "2026-10-04T05:18:00Z",
+      "status": "completed",
+      "blocked_by": null,
+      "handoff_path": null,
+      "notes": "COMPLETED: Landed Fix 2 (Deep-Loop Research Autonomy & Bot-Block Evasion) and Fix 1 (Egress Allowlist Friction & Source Pivoting). Bot-challenge detection, pivot guidance injection, multi-turn verified evidence gating, runtime candidate domain harvesting, pre-screened batch approval in policy_manager and web console, and adaptive source pivoting in preflight repair directives landed. Canonical model-free test gate 100/100 suites green (85 unit, 8 containment, 7 integration); ESTOP strictly engaged. Ownership released."
+    },
     {
       "agent": "gemini-cli",
       "role": "Principal Architect: Deep-Loop Re-Search Upgrade, Egress Attestation & Production Verification",

@@ -396,7 +396,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
           Policy Governance Portal · Candidate Domain Expansion Queue
         </h3>
-        <span class="text-xs font-mono text-slate-500">Propose-and-Confirm Protocol (No Auto-Admission)</span>
+        <div class="flex items-center gap-3">
+          <button onclick="approveAllSafeCandidates()" class="px-3 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/50 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            Approve All Safe Candidates
+          </button>
+          <span class="text-xs font-mono text-slate-500">Propose-and-Confirm Protocol (No Auto-Admission)</span>
+        </div>
       </div>
 
       <div class="overflow-x-auto rounded-2xl border border-bordercol bg-cardbg">
@@ -723,6 +729,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           ? `Approved ${host} and re-signed the attestation token.`
           : `Policy updated for ${host}, but attestation signing failed. Inspect via the operator CLI.`);
         refreshData();
+      }
+    }
+
+    async function approveAllSafeCandidates() {
+      if (!confirm("Pre-screen and batch-approve all safe candidate domains (valid syntax, live public DNS, zero SSRF risk)?")) return;
+      const res = await fetchAPI('/api/candidates/approve-safe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operator: 'web_operator', min_count: 1 })
+      });
+      if (res && res.success) {
+        alert(`Successfully approved ${res.count} safe candidate domain(s) and re-signed attestation token.`);
+        refreshData();
+      } else if (res && res.error) {
+        alert('Batch approval failed: ' + res.error);
       }
     }
 
@@ -1469,6 +1490,16 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
             try:
                 rec = gw.approve_domain(domain, rationale=rationale)
                 self._send_json({"success": True, "record": rec})
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=400)
+            return
+
+        if path == "/api/candidates/approve-safe":
+            operator = str(payload.get("operator") or "operator")
+            min_count = int(payload.get("min_count", 1))
+            try:
+                approved = gw.approve_safe_candidates(operator=operator, min_count=min_count)
+                self._send_json({"success": True, "approved": approved, "count": len(approved)})
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=400)
             return
