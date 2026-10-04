@@ -22,7 +22,7 @@ Eight samples still have Ready to Send tracker entries and misleading stored
 artifacts. The sole record marked verified has incomplete research and generic
 service-business ad copy for a coffee client. See the review for exact evidence.
 
-Next action: claim P1-D (browser console acceptance) or P1-E (honest outcome and cost measurement).
+Next action: claim P1-E (honest outcome and cost measurement).
 P0-A (truthful sample generation and safe artifact remediation) is COMPLETED.
 P0-B (evidence-bound, complete client packages) is COMPLETED:
 - `orchestrator/evidence_gate.py`: Distinguishes verified prospect identity from verified deliverable content; validates real claim values and non-empty sources/reviewers; supports optional ad waste estimates requiring authorized account extracts; checks required research sections (`keyword_research`, `negative_keyword_harvest`, `ad_copy_variants`); and binds approvals to cryptographic content hashes (`approved_content_hash`) with automatic fail-closed invalidation upon post-approval profile or deliverable mutations.
@@ -35,8 +35,12 @@ P1-C (browser rendering and bounded research path verification) is COMPLETED:
 - Evidence Classification: In `run_native_research_turn`, enforced that evidence is classified as `OK` only when HTTP status is 2xx/3xx, content is non-empty, not blocked, and no error occurred. Failed extractions are categorized as `ERROR`/`BLOCKED` and persisted to research notebook `dead_sources`.
 - Containment Documentation: Documented Native vs Hermes runtime boundary in `native_worker.py` docstring (Native runs in-process within the Python controller without OS Job Objects/Restricted Tokens; browser runs out-of-process via loopback CDP).
 - Real Browser Regression Suite: Added `tests/test_browser_real.py` (8/8 PASS) validating real Chrome JS rendering on ephemeral loopback fixture, HTTP non-rendering proof, absent selector fail-closed behavior, tab isolation, timeout bounds, navigation errors, ESTOP interruption, and evidence gating. Registered in `tests/tiers.json` under `integration`.
-Test gate expanded to 104/104 suites green (88 unit, 8 containment, 8 integration, exit 0).
-P1-D through P1-G cover console acceptance, measurement, a consented pilot, and independent release/deployment evidence. All other implementation packages remain PENDING.
+P1-D (console acceptance in a browser) is COMPLETED:
+- `orchestrator/web_ui.py`: Fixed JavaScript newline escaping defect in `HTML_TEMPLATE` (`split('\n')` -> `split('\\n')`), eliminating uncaught syntax error that prevented client-side script execution in real browsers. Verified real headless Chrome sign-in flow (`LOGIN_HTML` -> valid bearer token submission -> DOM replacement -> script mounting -> `refreshData()`).
+- UI Walkthrough & Verification: Verified all 4 Swarm Floor desks (Worker, Auditor, Warden, Scribe), attestation state badge ("VERIFIED"), ESTOP status ("ESTOP: ENGAGED"), client selection (`apex-roofing`), distribution research templates (7 canonical templates), interactive preview drawer rendering specs and criteria, disabled dispatch buttons under ESTOP, and colored interactive repair diff rendering.
+- Real Browser Acceptance Suite: Added `tests/test_web_ui_browser.py` (8/8 PASS) exercising headless Chrome via CDP against an isolated fixture server. Registered in `tests/tiers.json` under `integration`.
+Test gate expanded to 105/105 suites green (88 unit, 8 containment, 9 integration, exit 0).
+P1-E through P1-G cover measurement, a consented pilot, and independent release/deployment evidence. All other implementation packages remain PENDING.
 No new live window, credential write, policy widening, outreach, ad publication,
 or push is authorized by this plan. Historical implementation notes follow.
 

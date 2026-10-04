@@ -778,7 +778,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         document.getElementById('modal-diff-removed').innerText = `-${diffData.removed_lines}`;
         diffStatus.innerText = `${diffData.added_lines} additions, ${diffData.removed_lines} deletions across repair cycles`;
 
-        const highlighted = (diffData.diff || '').split('\n').map(line => {
+        const highlighted = (diffData.diff || '').split('\\n').map(line => {
           if (line.startsWith('+++') || line.startsWith('---')) {
             return `<span class="text-slate-400 font-bold block px-1">${escapeHTML(line)}</span>`;
           } else if (line.startsWith('+')) {

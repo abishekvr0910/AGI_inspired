@@ -1,7 +1,20 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-10-04T16:15:00Z",
+  "last_updated": "2026-10-04T16:35:00Z",
   "active_agents": [
+    {
+      "agent": "gemini-cli",
+      "role": "Principal Architect: P1-D Console Acceptance in a Browser",
+      "task_id": "PRODUCT-P1-D-2026-10-04",
+      "mode": "completed",
+      "owned_paths": [],
+      "started_at": "2026-10-04T16:20:00Z",
+      "last_update": "2026-10-04T16:35:00Z",
+      "status": "completed",
+      "blocked_by": null,
+      "handoff_path": "docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md",
+      "notes": "COMPLETED: Landed P1-D (Console Acceptance in a Browser) per docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md. Repaired JavaScript escaping bug in HTML_TEMPLATE controller (split('\\n')), verified headless Chrome sign-in flow (LOGIN_HTML -> bearer auth -> DOM replacement -> script mounting -> refreshData()), verified all 4 Swarm Floor stations, attestation badge, ESTOP status, client selection, distribution templates, interactive template preview drawer, paused dispatch refusal under ESTOP, interactive repair diffs, and CSP enforcement. Added tests/test_web_ui_browser.py (8/8 PASS) registered in tests/tiers.json under integration tier; full gate 105/105 suites green (unit 88, containment 8, integration 9, exit 0). ESTOP strictly engaged. Ownership released."
+    },
     {
       "agent": "gemini-cli",
       "role": "Principal Architect: P1-C Browser and Research Correctness",

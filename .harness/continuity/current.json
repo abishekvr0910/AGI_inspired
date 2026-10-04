@@ -1,25 +1,26 @@
 {
   "schema_version": 2,
-  "brief_revision": 179,
-  "created_at": "2026-10-04T16:15:00.000000+00:00",
+  "brief_revision": 180,
+  "created_at": "2026-10-04T16:35:00.000000+00:00",
   "status": "completed",
   "repository": {
     "branch": "master",
     "upstream": "origin/master",
     "tree_clean": true,
     "changed_paths": [],
-    "based_on_head": "869b7aa5716978bd3f60f0cab579468de5d80166"
+    "based_on_head": "c0ecbc2f587dc784cd4ea6fa928c247f756b7b7d"
   },
   "task": {
-    "id": "PRODUCT-P1-C-2026-10-04",
-    "phase": "browser_and_research_correctness",
+    "id": "PRODUCT-P1-D-2026-10-04",
+    "phase": "console_acceptance_in_browser",
     "status": "completed",
-    "next_action": "Claim PRODUCT-P1-D-2026-10-04 or P1-E from docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md."
+    "next_action": "Claim PRODUCT-P1-E-2026-10-04 from docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md."
   },
   "completed": [
-    "Hardened Native CDP browser extraction (orchestrator/native_worker.py): isolated tab acquisition (_acquire_cdp_page_target via PUT /json/new), tab closure (_close_cdp_page_target via PUT /json/close/<id>), message-ID routing over WebSocket (_async_cdp_extract), JS DOM extraction via Runtime.evaluate, fail-closed handling without silent HTTP fallback, bounded timeout handling, unreachable navigation handling, and ESTOP checks.",
-    "Enforced research evidence classification: run_native_research_turn requires valid 2xx status, non-empty content, no access blocks, and no errors before marking OK; failures classified as ERROR/BLOCKED and recorded to notebook dead_sources. Documented Native in-process vs Hermes subprocess containment boundaries.",
-    "Added tests/test_browser_real.py (8/8 PASS) validating real Chrome JS rendering on ephemeral loopback fixture, HTTP non-rendering proof, absent selector fail-closed behavior, tab isolation, timeout bounds, navigation errors, ESTOP interruption, and evidence gating; registered in tests/tiers.json integration tier. Gate 104/104 green."
+    "Repaired JavaScript newline escaping defect in HTML_TEMPLATE controller (orchestrator/web_ui.py line 781: split('\\n')), eliminating uncaught syntax error that prevented client-side script execution in real browsers.",
+    "Verified full headless Chrome sign-in flow (LOGIN_HTML -> bearer token submit -> DOM replacement -> script mounting -> refreshData()), verifying Swarm Floor stations (Worker, Auditor, Warden, Scribe), attestation state badge ('VERIFIED'), and ESTOP status ('ESTOP: ENGAGED').",
+    "Verified Ad & Research Engine tab client selection, 7 canonical distribution research templates, interactive template preview drawer rendering compiled specs/criteria, disabled dispatch buttons under ESTOP, interactive repair diffs, and direct package download gating.",
+    "Added tests/test_web_ui_browser.py (8/8 PASS) registered in tests/tiers.json integration tier. Model-free test gate expanded to 105/105 suites green (unit 88, containment 8, integration 9), exit 0. ESTOP strictly engaged."
   ],
   "locked_constraints": [
     "ESTOP engaged; no live provider calls or cohort without an explicit operator window.",
@@ -29,12 +30,12 @@
   ],
   "gate": {
     "status": "passed",
-    "detail": "104/104 suites passed (unit 88, containment 8, integration 8), exit 0. No live calls. ESTOP strictly engaged."
+    "detail": "105/105 suites passed (unit 88, containment 8, integration 9), exit 0. No live calls. ESTOP strictly engaged."
   },
   "references": [
     {
       "path": "docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md",
-      "sha256": "210588712130646e5e34544ebb2ce3e7c7f313d23041f6161d6bea34a63b585f"
+      "sha256": "b66b3cfd8919db944989b3b27bccdda6fd5b4c00d91d4d8103f93923f67411e4"
     },
     {
       "path": "docs/reviews/CODEX_PRODUCT_REVIEW_2026-10-04.md",
@@ -42,23 +43,23 @@
     },
     {
       "path": "docs/CURRENT_STATE.md",
-      "sha256": "b58f1fd0cc24d2f2032c24f4cc52141c698eca2a189e710bc05185848127599b"
+      "sha256": "3769230e1dad14e8be199077c6f2a5c05df5227c7427a6bf22b35979645e15ba"
     },
     {
       "path": "docs/ACTIVE_WORK.json",
-      "sha256": "056ca3527abab840b8c06c7226e700a983daba92f19fe4b82e810998184d411b"
+      "sha256": "4578ae16ef670f36bc4dd43737d40e48efc0d2589e341354d18be74bfa93430b"
     },
     {
       "path": "docs/README.md",
       "sha256": "296cd4463ad49d01627b392bf1e957e5e14bc5d2a1498b10798be6e4146712bf"
     },
     {
-      "path": "orchestrator/native_worker.py",
-      "sha256": "944e0e26ef9f545cb54e9183f320c7eeaf350b010d85389d82fa3d071a447174"
+      "path": "orchestrator/web_ui.py",
+      "sha256": "41280d2be463da07e2979e49ce1a8f5729eba8803bed6ddc46e83a0b8b6dbf03"
     },
     {
-      "path": "tests/test_browser_real.py",
-      "sha256": "9e749d86565689f7829c7428901d92440e68ba4830f5a8d3100d910d1836b753"
+      "path": "tests/test_web_ui_browser.py",
+      "sha256": "b562b4ef7c572b1088387f4da5c5261aad97b7a97fb572d79301e817d282d69a"
     }
   ]
 }

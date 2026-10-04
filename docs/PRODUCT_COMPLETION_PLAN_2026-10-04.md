@@ -58,12 +58,12 @@ Key reasons for this sequence:
 | P0-A | Gemini | None | Honest sample inventory, safe cleanup, truthful generator | COMPLETED |
 | P0-B | Gemini | P0-A | Evidence-bound, complete client exports | COMPLETED |
 | P1-C | Codex or another forward engineer | None; isolated from A/B | Real browser and bounded research path verification | COMPLETED |
-| P1-D | Gemini or UI engineer | P0-B; P1-C before integration | Actual browser console acceptance | PENDING |
+| P1-D | Gemini or UI engineer | P0-B; P1-C before integration | Actual browser console acceptance | COMPLETED |
 | P1-E | Codex or data engineer | Coordinate runner edits with P1-C | Honest outcome and cost measurement | PENDING |
 | P1-F | Forward engineer + operator | A-E reviewed; data and live authority | One client pilot with reviewed outputs | PENDING |
 | P1-G | Independent reviewer + deployment engineer | Read-only review can start now | Release and deployment evidence | PENDING |
 
-Start P1-D or P1-E next. P1-D tests browser console acceptance; P1-E reconciles outcome and cost accounting.
+Start P1-E next (honest outcome and cost measurement). P1-E reconciles outcome and cost accounting.
 P1-E can proceed independently only if its path ownership does not overlap.
 Do not start additional frameworks, subagent fleets, dashboard redesigns, or
 partner integrations until the accepted workflow exposes a concrete need.
@@ -223,6 +223,15 @@ browser acceptance tests. Inspect current browser tooling before adding a depend
 
 Verification: `test_web_ui`, `test_web_ui_security`, new isolated browser flow,
 then full gate. P1-D is complete only with actual browser execution evidence.
+
+**Status: COMPLETED (2026-10-04)**
+- Real Browser Sign-In & Script Execution: Diagnosed and repaired newline escaping defect in `HTML_TEMPLATE` JavaScript controller (`split('\n')` -> `split('\\n')`), which previously caused syntax errors preventing dynamic script execution in real browsers. Verified real sign-in in headless Chrome (`LOGIN_HTML` -> valid bearer token submission -> DOM replacement -> script mounting -> `refreshData()` execution).
+- Cockpit Walkthrough & Element Verification: Validated rendering of all 4 Swarm Floor stations (Worker, Auditor, Warden, Scribe), attestation state badge ("VERIFIED"), and ESTOP label ("ESTOP: ENGAGED").
+- Ad & Research Engine Tab & Template Preview: Verified tab switching, client profile dropdown population (`apex-roofing`), template dropdown population (7 canonical templates), and interactive template preview drawer rendering compiled specs and criteria.
+- Paused Dispatch Protection: Verified dispatch buttons (`#btn-dispatch-submit`, `#btn-dist-dispatch`) are disabled under active ESTOP.
+- Interactive Repair Diffs & Export Gating: Verified interactive repair diff rendering with colored additions (`+green`) and deletions (`-red`), and verified that direct browser fetches to unapproved client packages fail closed or require explicit draft allowances under CSP.
+- Real Browser Acceptance Suite: Added `tests/test_web_ui_browser.py` (8/8 PASS) exercising real headless Chrome via CDP against an isolated fixture server. Registered in `tests/tiers.json` under `integration`.
+- Test Gate: Canonical model-free test gate expanded to 105/105 suites green (unit 88, containment 8, integration 9, exit 0). ESTOP strictly engaged.
 
 ## 8. P1-E: Honest Outcome and Cost Measurement
 
