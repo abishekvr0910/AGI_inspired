@@ -56,14 +56,14 @@ Key reasons for this sequence:
 | ID | Suggested implementer | Dependency | Deliverable | Status |
 | --- | --- | --- | --- | --- |
 | P0-A | Gemini | None | Honest sample inventory, safe cleanup, truthful generator | COMPLETED |
-| P0-B | Gemini | P0-A | Evidence-bound, complete client exports | PENDING |
+| P0-B | Gemini | P0-A | Evidence-bound, complete client exports | COMPLETED |
 | P1-C | Codex or another forward engineer | None; isolated from A/B | Real browser and bounded research path verification | PENDING |
 | P1-D | Gemini or UI engineer | P0-B; P1-C before integration | Actual browser console acceptance | PENDING |
 | P1-E | Codex or data engineer | Coordinate runner edits with P1-C | Honest outcome and cost measurement | PENDING |
 | P1-F | Forward engineer + operator | A-E reviewed; data and live authority | One client pilot with reviewed outputs | PENDING |
 | P1-G | Independent reviewer + deployment engineer | Read-only review can start now | Release and deployment evidence | PENDING |
 
-Start P0-B next. P1-C can proceed in an isolated worktree while A/B proceed.
+Start P1-C next (or P1-D / P1-E in parallel if isolated). P1-C can proceed in an isolated worktree.
 P1-E can proceed independently only if its path ownership does not overlap C.
 Do not start additional frameworks, subagent fleets, dashboard redesigns, or
 partner integrations until the accepted workflow exposes a concrete need.
@@ -155,6 +155,17 @@ Acceptance:
 Verification: targeted gate filters `test_campaign_builder_regression`,
 `test_client_reporter`, `test_distribution_cli`, `test_web_ui_security` and the new
 evidence regressions, then full gate. Claude reviews the negative cases separately.
+
+**Status: COMPLETED (2026-10-04)**
+- Identity vs deliverable evidence separation: `orchestrator/evidence_gate.py` validates actual claim values, non-empty sources, dates, and reviewer identity (`is_valid_evidence()`); placeholder field names and empty records fail closed.
+- Optional waste estimates: savings claims are optional; when present, require authorized account extract references (`authorized_google_ads_export_...` or similar) without forcing synthetic waste figures.
+- Cryptographic approval drift detection: binds export approvals to SHA256 content digests (`approved_content_hash`) across client profile, verified evidence, and deliverables. Post-approval mutations automatically invalidate approval and fail closed.
+- Deliverable completeness gating: `check_required_deliverables()` requires non-pending `keyword_research`, `negative_keyword_harvest`, and `ad_copy_variants`. Incomplete research fails closed on client-ready export (`EXPORT_BLOCKED`) while permitting explicitly marked internal drafts (`allow_draft=True`).
+- Boilerplate removal: stripped hardcoded contractor copy ("Licensed & Bonded Pros", "24/7 Emergency Service", etc.) from `orchestrator/campaign_builder.py`; added language-aware profile-grounded neutral defaults.
+- Paused campaign status: enforced `Status: Paused` across 100% of exported CSV rows (sample, draft, and verified).
+- Real client remediation: `el-shaddai-coffee-katowice` updated in `workspace/verifications/index.json` with honest identity claims, unapproved for export due to pending research; strategy dossier regenerated with missing research warnings; ads CSV regenerated with neutral Polish copy and `Status: Paused`.
+- Regression test suite: `tests/test_evidence_gate.py` (8/8 PASS) covering all acceptance criteria, registered in `tests/tiers.json`.
+- Test gate: expanded to 103/103 test suites PASS, exit 0. ESTOP strictly engaged.
 
 ## 6. P1-C: Browser and Research Correctness
 

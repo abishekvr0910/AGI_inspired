@@ -251,14 +251,22 @@ def generate_executive_dossier(
     
     # Check for sample/verification status
     is_sample = (
-        client_profile.get("_force_export", False) or
-        client_profile.get("_verification_status") == "sample"
+        client_profile.get("_verification_status") == "sample" or
+        client_profile.get("_is_sample", False)
+    )
+    is_draft = (
+        client_profile.get("_is_draft", False) or
+        (client_profile.get("_force_export", False) and not is_sample)
     )
     sample_banner = ""
     if is_sample:
         sample_banner = "\n> **⚠ SAMPLE MATERIAL — NOT VERIFIED FOR CLIENT USE**\n> This package was generated from synthetic/demonstration data. All contacts, waste estimates, and claims are UNVERIFIED.\n"
-
-    report_tag = "> **[SAMPLE DEMONSTRATION MATERIAL]** | Compiled via AGI_like Distribution Engine" if is_sample else "> **Confidential Client Report** | Compiled Deterministically via AGI_like Distribution Engine"
+        report_tag = "> **[SAMPLE DEMONSTRATION MATERIAL]** | Compiled via AGI_like Distribution Engine"
+    elif is_draft:
+        sample_banner = "\n> **⚠ INTERNAL DRAFT — INCOMPLETE RESEARCH — NOT FOR CLIENT USE**\n> Research sections are incomplete or pending generation. Do not distribute to clients or launch campaigns without full verification.\n"
+        report_tag = "> **[INTERNAL DRAFT]** | Compiled via AGI_like Distribution Engine"
+    else:
+        report_tag = "> **Confidential Client Report** | Compiled Deterministically via AGI_like Distribution Engine"
 
     lines: list[str] = [
         f"# Executive Strategy & Distribution Audit: {display_name}",
@@ -506,46 +514,57 @@ def compile_and_export_client_package(
     db_path: Path | str | None = None,
     runs_dir: Path | str | None = None,
     force_export: bool = False,
+    allow_draft: bool = False,
 ) -> dict[str, Any]:
     """Compile all deliverables for a client into strategy dossier and Google Ads Editor CSV.
     
-    Evidence Gate: Blocks client-ready export unless prospect is VERIFIED with operator approval.
-    Use force_export=True only for sample/internal generation (adds SAMPLE watermark).
+    Evidence Gate: Blocks client-ready export unless prospect is VERIFIED with operator approval
+    and all required research sections are complete.
+    Use allow_draft=True or force_export=True only for internal draft generation (adds visible watermarks).
     """
-    # Evidence gate check
-    if not force_export:
-        can_export, reason = verify_client_package_export(client_id, root=root)
-        if not can_export:
+    prof = load_client_profile(client_id, root=root)
+    cdir = client_dir(client_id, root=root)
+    deliverables = load_client_deliverables(client_id, root=root, db_path=db_path, runs_dir=runs_dir)
+
+    from evidence_gate import EvidenceGate, VerificationStatus, verify_client_package_export
+    gate = EvidenceGate(root)
+    verification = gate.get(client_id)
+    v_status = verification.status.value if verification else "unknown"
+
+    # Evidence gate check against profile and deliverables
+    can_export, reason = verify_client_package_export(
+        client_id, root=root, profile=prof, deliverables=deliverables
+    )
+
+    if not can_export:
+        if not force_export and not allow_draft:
             return {
                 "success": False,
                 "client_id": client_id,
                 "error": "EXPORT_BLOCKED",
-                "message": f"Evidence gate blocked export: {reason}. Use force_export=True for sample generation only.",
+                "message": f"Evidence gate blocked export: {reason}. Use allow_draft=True for internal review draft.",
                 "verification_status": "blocked",
             }
-    
-    prof = load_client_profile(client_id, root=root)
-    cdir = client_dir(client_id, root=root)
-    deliverables = load_client_deliverables(client_id, root=root, db_path=db_path, runs_dir=runs_dir)
-    
-    # Add verification status to profile for watermarking
-    from evidence_gate import EvidenceGate, VerificationStatus
-    gate = EvidenceGate(root)
-    verification = gate.get(client_id)
-    prof["_verification_status"] = verification.status.value if verification else "unknown"
+        is_draft = True
+    else:
+        is_draft = False
+
+    is_sample = (v_status == "sample") or (force_export and v_status != "verified")
+    prof["_verification_status"] = v_status
     prof["_force_export"] = force_export
+    prof["_is_draft"] = is_draft
+    prof["_is_sample"] = is_sample
 
     # 1. Parse structured findings
     kw_entries = extract_keywords_from_deliverable(deliverables.get("keyword_research", ""))
     neg_entries = extract_negatives_from_deliverable(deliverables.get("negative_keyword_harvest", ""))
     ad_entries = extract_ad_copies_from_deliverable(deliverables.get("ad_copy_variants", ""))
 
-    # If deliverables are empty or in progress, fallback to profile defaults so compiler always works
+    # Fallback to seed keywords ONLY for draft/sample packages when research deliverables are pending
     if not kw_entries and prof.get("seed_keywords"):
         kw_entries = [{"keyword": kw, "theme": kw, "intent": "commercial"} for kw in prof["seed_keywords"]]
 
     # 2. Build Campaign structure via campaign_builder
-    # Organize ad copy entries into standard dictionary
     ad_copy_dicts: list[dict[str, Any]] = []
     if ad_entries:
         headlines = [a["copy_text"] for a in ad_entries if "headline" in a.get("component", "").lower()]
@@ -557,15 +576,19 @@ def compile_and_export_client_package(
                 "final_url": prof.get("landing_url", "https://example.com"),
             })
 
+    prefix = "[SAMPLE] " if is_sample else "[DRAFT] " if is_draft else ""
+    campaign_name = f"{prefix}{prof.get('display_name', client_id)} - Search - {prof.get('domain', 'Core')}"
+
     campaign = campaign_builder.build_campaign_from_research(
         client_profile=prof,
         keywords=kw_entries,
         ad_copies=ad_copy_dicts if ad_copy_dicts else None,
         negatives=neg_entries if neg_entries else None,
-        verified_for_export=not force_export,  # Only verified for export if not forced sample
+        campaign_name=campaign_name,
+        verified_for_export=(not is_draft and not is_sample),
     )
 
-    # 3. Export Google Ads Editor bulk CSV
+    # 3. Export Google Ads Editor bulk CSV (defaulted strictly to Paused status)
     csv_path = cdir / "google_ads_editor_import.csv"
     export_google_ads_editor_csv(campaign, csv_path)
 
@@ -587,6 +610,9 @@ def compile_and_export_client_package(
         "client_id": client_id,
         "display_name": prof.get("display_name", client_id),
         "deliverables_found": list(deliverables.keys()),
+        "is_draft": is_draft,
+        "is_sample": is_sample,
+        "verification_status": "verified" if (not is_draft and not is_sample) else "sample" if is_sample else "draft",
         "csv_path": str(csv_path),
         "json_path": str(json_path),
         "dossier_md_path": str(md_path),
@@ -599,3 +625,4 @@ def compile_and_export_client_package(
             "total_ads": campaign.total_ads(),
         },
     }
+

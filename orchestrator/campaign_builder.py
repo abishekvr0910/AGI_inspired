@@ -190,30 +190,57 @@ def build_campaign_from_research(
         theme_groups.setdefault(theme, []).append(item)
 
     # 3. Compile Ad Copies for reuse across Ad Groups (targeting Excellent Ad Strength: 15 headlines, 4 descriptions)
-    # Expanded default headlines to reach 15 after forbidden-claim filtering
-    default_headlines = [
-        f"{display_name}"[:MAX_HEADLINE_LENGTH],
-        f"Fast & Reliable Service"[:MAX_HEADLINE_LENGTH],
-        f"Get A Free Quote Today"[:MAX_HEADLINE_LENGTH],
-        f"Experienced Local Team"[:MAX_HEADLINE_LENGTH],
-        f"Transparent Pricing"[:MAX_HEADLINE_LENGTH],
-        f"Licensed & Bonded Pros"[:MAX_HEADLINE_LENGTH],  # Replaces "Certified & Insured"
-        f"Top-Rated Local Service"[:MAX_HEADLINE_LENGTH],
-        f"Call Our Specialists Today"[:MAX_HEADLINE_LENGTH],
-        f"Same-Day Consultations"[:MAX_HEADLINE_LENGTH],
-        f"Flexible Payment Options"[:MAX_HEADLINE_LENGTH],
-        f"24/7 Emergency Service"[:MAX_HEADLINE_LENGTH],
-        f"Free On-Site Estimates"[:MAX_HEADLINE_LENGTH],
-        f"Decades of Experience"[:MAX_HEADLINE_LENGTH],
-        f"Locally Owned & Operated"[:MAX_HEADLINE_LENGTH],
-        f"Commercial Specialists"[:MAX_HEADLINE_LENGTH],
-    ]
-    default_descriptions = [
-        f"Contact {display_name} today for dependable service. Call for free quote!"[:MAX_DESCRIPTION_LENGTH],
-        f"Transparent pricing with zero hidden fees. Quality work on every project."[:MAX_DESCRIPTION_LENGTH],
-        f"Proven expertise and reliable support from our local specialists. Book consult today!"[:MAX_DESCRIPTION_LENGTH],
-        f"High quality solutions tailored to your needs. Schedule your appointment now."[:MAX_DESCRIPTION_LENGTH],
-    ]
+    # Neutral, profile-grounded defaults derived directly from client profile without fabricating factual claims
+    lang = (client_profile.get("language") or ["en"])[0].lower() if client_profile.get("language") else "en"
+
+    if lang == "pl":
+        default_headlines = [
+            f"{display_name}"[:MAX_HEADLINE_LENGTH],
+            f"Oficjalna Strona"[:MAX_HEADLINE_LENGTH],
+            f"Poznaj Nasza Oferte"[:MAX_HEADLINE_LENGTH],
+            f"Skontaktuj Sie Z Nami"[:MAX_HEADLINE_LENGTH],
+            f"Sprawdz Nasz Katalog"[:MAX_HEADLINE_LENGTH],
+            f"Wysoka Jakosc Produktow"[:MAX_HEADLINE_LENGTH],
+            f"Oferta Online"[:MAX_HEADLINE_LENGTH],
+            f"Dowiedz Sie Wiecej"[:MAX_HEADLINE_LENGTH],
+            f"Szeroki Wybor"[:MAX_HEADLINE_LENGTH],
+            f"Zamow Online"[:MAX_HEADLINE_LENGTH],
+            f"Oryginalne Produkty"[:MAX_HEADLINE_LENGTH],
+            f"Sprawdz Szczegoly"[:MAX_HEADLINE_LENGTH],
+            f"{display_name} Online"[:MAX_HEADLINE_LENGTH],
+            f"Kontakt I Informacje"[:MAX_HEADLINE_LENGTH],
+            f"Zobacz Nowosci"[:MAX_HEADLINE_LENGTH],
+        ]
+        default_descriptions = [
+            f"Poznaj oferte {display_name}. Sprawdz szczegoly na naszej oficjalnej stronie internetowej."[:MAX_DESCRIPTION_LENGTH],
+            f"Zapraszamy do kontaktu z {display_name}. Oferujemy szeroki asortyment i profesjonalne podejscie."[:MAX_DESCRIPTION_LENGTH],
+            f"Szukasz sprawdzonych rozwiazan? Dowiedz sie wiecej o ofercie dopasowanej do Twoich potrzeb."[:MAX_DESCRIPTION_LENGTH],
+            f"Odwiedz oficjalna strone {display_name} i sprawdz aktualny katalog produktow oraz kontakt."[:MAX_DESCRIPTION_LENGTH],
+        ]
+    else:
+        default_headlines = [
+            f"{display_name}"[:MAX_HEADLINE_LENGTH],
+            f"Official Website"[:MAX_HEADLINE_LENGTH],
+            f"Explore Our Offerings"[:MAX_HEADLINE_LENGTH],
+            f"Learn More Today"[:MAX_HEADLINE_LENGTH],
+            f"Contact Our Team"[:MAX_HEADLINE_LENGTH],
+            f"View Products & Services"[:MAX_HEADLINE_LENGTH],
+            f"Dedicated Customer Care"[:MAX_HEADLINE_LENGTH],
+            f"Discover Options Online"[:MAX_HEADLINE_LENGTH],
+            f"Quality & Commitment"[:MAX_HEADLINE_LENGTH],
+            f"Inquire Online"[:MAX_HEADLINE_LENGTH],
+            f"Connect With Us"[:MAX_HEADLINE_LENGTH],
+            f"Schedule A Consultation"[:MAX_HEADLINE_LENGTH],
+            f"Browse Our Selection"[:MAX_HEADLINE_LENGTH],
+            f"{display_name} Online"[:MAX_HEADLINE_LENGTH],
+            f"Find What You Need"[:MAX_HEADLINE_LENGTH],
+        ]
+        default_descriptions = [
+            f"Discover {display_name}. Explore our offerings and learn more on our official website."[:MAX_DESCRIPTION_LENGTH],
+            f"Welcome to {display_name}. Browse our selection and connect with our team today."[:MAX_DESCRIPTION_LENGTH],
+            f"Learn more about solutions tailored to your needs from {display_name}."[:MAX_DESCRIPTION_LENGTH],
+            f"Contact {display_name} online to explore our catalog, services, and consultation options."[:MAX_DESCRIPTION_LENGTH],
+        ]
 
     # Filter forbidden claims from defaults BEFORE use
     default_headlines, default_descriptions = filter_forbidden_claims(
@@ -332,7 +359,8 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
     is_verified = getattr(campaign, "verified_for_export", False)
     campaign_name = campaign.name
     if not is_verified:
-        campaign_name = f"SAMPLE_{campaign_name}"
+        if not campaign_name.startswith("SAMPLE_") and not campaign_name.startswith("[SAMPLE]") and not campaign_name.startswith("[DRAFT]"):
+            campaign_name = f"SAMPLE_{campaign_name}"
 
     headers = [
         "Campaign",
@@ -365,7 +393,7 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
     with open(p, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         
-        # Add sample warning as first row (Google Ads Editor ignores rows without Campaign name)
+        # Add sample warning as first row if not verified
         if not is_verified:
             writer.writerow([
                 "# SAMPLE CAMPAIGN - NOT VERIFIED FOR CLIENT USE",
@@ -374,16 +402,16 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
         
         writer.writerow(headers)
 
-        # 1. Campaign-level negative keywords
+        # 1. Campaign-level negative keywords (always default to Paused)
         for neg in campaign.campaign_negatives:
             writer.writerow([
                 campaign_name,
                 "",  # Campaign negative has empty Ad Group
                 neg.text,
                 f"Negative {neg.match_type}",
-            ] + [""] * 19 + ["", "Enabled"])
+            ] + [""] * 19 + ["", "Paused"])
 
-        # 2. Ad Groups, Keywords, and RSA Ads
+        # 2. Ad Groups, Keywords, and RSA Ads (always default to Paused)
         for ag in campaign.ad_groups:
             # Positive keywords
             for kw in ag.keywords:
@@ -392,7 +420,7 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
                     ag.name,
                     kw.text,
                     kw.match_type,
-                ] + [""] * 19 + ["", "Enabled"])
+                ] + [""] * 19 + ["", "Paused"])
 
             # Ad Group level negatives
             for neg in ag.negatives:
@@ -401,7 +429,7 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
                     ag.name,
                     neg.text,
                     f"Negative {neg.match_type}",
-                ] + [""] * 19 + ["", "Enabled"])
+                ] + [""] * 19 + ["", "Paused"])
 
             # RSA Ads
             for ad in ag.ads:
@@ -412,6 +440,6 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
                     ag.name,
                     "",  # Ad row has empty keyword
                     "",
-                ] + hl + dl + [ad.final_url, "Enabled"])
+                ] + hl + dl + [ad.final_url, "Paused"])
 
     return p

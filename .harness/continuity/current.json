@@ -1,40 +1,40 @@
 {
   "schema_version": 2,
-  "brief_revision": 177,
-  "created_at": "2026-10-04T14:07:54.181259+00:00",
+  "brief_revision": 178,
+  "created_at": "2026-10-04T14:29:54.816382+00:00",
   "status": "completed",
   "repository": {
     "branch": "master",
     "upstream": "origin/master",
     "tree_clean": true,
     "changed_paths": [],
-    "based_on_head": "45d86fbf2c56478f4b227bfac009d96c02751244"
+    "based_on_head": "18253ff79c46a1c4557cd987d6237dcf3900cd3e"
   },
   "task": {
-    "id": "PRODUCT-P0-A-2026-10-04",
-    "phase": "sample_remediation_and_generator_hardening",
+    "id": "PRODUCT-P0-B-2026-10-04",
+    "phase": "evidence_and_complete_client_packages",
     "status": "completed",
-    "next_action": "Claim PRODUCT-P0-B-2026-10-04 from docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md."
+    "next_action": "Claim PRODUCT-P1-C-2026-10-04 or P1-D / P1-E from docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md."
   },
   "completed": [
-    "Remediated 8 known synthetic sample prospects: backed up in workspace/backups/samples_pre_remediation_20261004/ with sha256 checksums.",
-    "PROSPECT_TRACKER.csv relabeled to SAMPLE_NOT_FOR_SEND; Google Ads CSVs set to Paused; pitches sanitized with demo banners; generate_prospect_pipeline.py gated on compiler success.",
-    "Added scripts/remediate_sample_artifacts.py and tests/test_sample_remediation.py (10/10 PASS). Full gate 102/102 test suites green."
+    "Landed evidence-bound client packages: is_valid_evidence() in evidence_gate.py requires real claim values, non-empty sources/reviewers, dates; optional waste estimates require authorized account extract references.",
+    "Bound approvals to SHA256 content digests (approved_content_hash); post-approval mutations fail closed. Deliverable completeness gating blocks unverified client exports (EXPORT_BLOCKED) while allowing marked internal drafts (allow_draft=True).",
+    "Removed contractor boilerplate from campaign_builder.py, added language-aware neutral copy, enforced Status: Paused across 100% of CSV rows. Remediated el-shaddai-coffee-katowice to unapproved export status. Added tests/test_evidence_gate.py (8/8 PASS). Gate 103/103 green."
   ],
   "locked_constraints": [
     "ESTOP engaged; no live provider calls or cohort without an explicit operator window.",
     "No credential provisioning, policy widening, outreach, publication, ad spend or push.",
     "Preserve runtime artifacts; no guessed costs, fabricated evidence or changed historical verdicts.",
-    "Preserve real client data untouched (el-shaddai-coffee-katowice)."
+    "All exported campaigns default strictly to Status: Paused; no ad platform calls."
   ],
   "gate": {
     "status": "passed",
-    "detail": "102/102 suites passed (unit 87, containment 8, integration 7), exit 0. No live calls. ESTOP strictly engaged."
+    "detail": "103/103 suites passed (unit 88, containment 8, integration 7), exit 0. No live calls. ESTOP strictly engaged."
   },
   "references": [
     {
       "path": "docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md",
-      "sha256": "79430bb5050acd6416275fa7dbbeac58c748f2756db0d70b6394e583bb936467"
+      "sha256": "5560485ba1f7a42236a4f431a2f755a71bc09418ea579af726c724ac779c9116"
     },
     {
       "path": "docs/reviews/CODEX_PRODUCT_REVIEW_2026-10-04.md",
@@ -42,23 +42,23 @@
     },
     {
       "path": "docs/CURRENT_STATE.md",
-      "sha256": "14f9cfd283245e22d24f013f673e642ae9a0a59c58acaa38dc32678cc380b676"
+      "sha256": "3a4121e566656ce87c7ebfb150630e9b10d184fe7ddaade710de08dc688611f9"
     },
     {
       "path": "docs/ACTIVE_WORK.json",
-      "sha256": "1e7453cfb1d5360879f0f7e86effae7c22b5b51d06ba6119f9cad38da6975a4d"
+      "sha256": "70adb358dcceecb9166b71822faf0e57f9eb4b6608d7da69d737e6cd8b65fa47"
     },
     {
       "path": "docs/README.md",
       "sha256": "296cd4463ad49d01627b392bf1e957e5e14bc5d2a1498b10798be6e4146712bf"
     },
     {
-      "path": "scripts/remediate_sample_artifacts.py",
-      "sha256": "cd3228f586de7835cb4ae3c26f154cc9a1a3778512f2ebc1b57ddc51afe083b3"
+      "path": "orchestrator/evidence_gate.py",
+      "sha256": "85e45a25c515e6c0fc6b2a78d895b74c014ec61e953c0afc41e0f2a6ae7d0a36"
     },
     {
-      "path": "tests/test_sample_remediation.py",
-      "sha256": "2d75e99959bd9ae6ebb0b2cd315079625ebad4be23b664038614ea0932801f45"
+      "path": "tests/test_evidence_gate.py",
+      "sha256": "a23f412bc1989a2990484eb066a25b3d4d7de9aa7c735b618b1e3962ecf8fe0d"
     }
   ]
 }

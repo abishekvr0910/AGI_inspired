@@ -1395,13 +1395,13 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
                 root_path = _get_root_from_gateway(gw)
                 try:
                     import client_reporter
-                    # Use force_export=True for CSV download (sample generation for review)
+                    # Use allow_draft=True for CSV download (allowing internal draft review)
                     res = client_reporter.compile_and_export_client_package(
                         client_id,
                         root=root_path,
                         db_path=gw.ledger_db,
                         runs_dir=gw.runs_dir,
-                        force_export=True,
+                        allow_draft=True,
                     )
                     csv_bytes = Path(res["csv_path"]).read_bytes()
                     self.send_response(200)
@@ -1426,7 +1426,7 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
                         root=root_path,
                         db_path=gw.ledger_db,
                         runs_dir=gw.runs_dir,
-                        force_export=True,
+                        allow_draft=True,
                     )
                     html_bytes = Path(res["dossier_html_path"]).read_bytes()
                     self.send_response(200)
@@ -1451,7 +1451,7 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
                         root=root_path,
                         db_path=gw.ledger_db,
                         runs_dir=gw.runs_dir,
-                        force_export=True,
+                        allow_draft=True,
                     )
                     md_bytes = Path(res["dossier_md_path"]).read_bytes()
                     self.send_response(200)
@@ -1678,12 +1678,15 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
                         root=root_path,
                         db_path=gw.ledger_db,
                         runs_dir=gw.runs_dir,
-                        force_export=True,
+                        allow_draft=True,
                     )
                     self._send_json({
-                        "success": True,
+                        "success": res.get("success", False),
                         "client_id": client_id,
                         "display_name": res.get("display_name", client_id),
+                        "is_draft": res.get("is_draft", False),
+                        "is_sample": res.get("is_sample", False),
+                        "verification_status": res.get("verification_status", "draft"),
                         "csv_path": res.get("csv_path"),
                         "json_path": res.get("json_path"),
                         "dossier_md_path": res.get("dossier_md_path"),
