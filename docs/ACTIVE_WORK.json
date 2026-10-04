@@ -1,7 +1,20 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-10-04T14:28:00Z",
+  "last_updated": "2026-10-04T16:15:00Z",
   "active_agents": [
+    {
+      "agent": "gemini-cli",
+      "role": "Principal Architect: P1-C Browser and Research Correctness",
+      "task_id": "PRODUCT-P1-C-2026-10-04",
+      "mode": "completed",
+      "owned_paths": [],
+      "started_at": "2026-10-04T14:40:00Z",
+      "last_update": "2026-10-04T16:15:00Z",
+      "status": "completed",
+      "blocked_by": null,
+      "handoff_path": "docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md",
+      "notes": "COMPLETED: Landed P1-C (Browser and Research Correctness) per docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md. Hardened Native CDP browser extraction (dedicated tab acquisition _acquire_cdp_page_target via PUT /json/new, isolated tab closure via PUT /json/close/<id>, asynchronous message-ID routing over WebSocket in _async_cdp_extract, JS evaluation via Runtime.evaluate, fail-closed handling with no silent HTTP fallback, bounded timeout handling, unreachable navigation handling, and ESTOP checks); hardened evidence classification in run_native_research_turn (status 2xx, non-empty, not blocked, no error required for OK classification; errors and blocks stored in notebook dead_sources); documented Native vs Hermes runtime containment boundaries; created tests/test_browser_real.py (8/8 PASS) validating real Chrome JS rendering on ephemeral loopback fixture; registered in tests/tiers.json under integration tier; full gate 104/104 suites green (unit 88, containment 8, integration 8, exit 0). ESTOP strictly engaged. Ownership released."
+    },
     {
       "agent": "gemini-cli",
       "role": "Principal Architect: P0-B Evidence and Complete Client Packages",

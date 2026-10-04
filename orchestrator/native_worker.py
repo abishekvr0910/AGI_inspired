@@ -1,9 +1,16 @@
 """Native Agentic Research Worker for AGI_like Harness.
 
 Pure Python, zero-external-bloat agentic research loop that executes turns
-under strict OS-level confinement, using our own tools (search, fetch, CDP browser)
-without any dependency on external CLI frameworks. Directly integrates with the
-research notebook and skill promotion memory loop.
+using our own tools (search, fetch, CDP browser) without any dependency on
+external CLI frameworks. Directly integrates with the research notebook and
+skill promotion memory loop.
+
+Architecture & Containment Note:
+Native Worker runs in-process within the Python controller runtime. It does NOT
+spawn as an OS child process with a Win32 Job Object or Restricted Token (unlike
+Hermes, which is launched via worker_sandbox.py in a dedicated subprocess).
+Instead, its browser operations delegate out-of-process to the host-managed
+browser daemon (browser_daemon.py) over loopback CDP (127.0.0.1:9222).
 
 Zero-spend: Never executes write or mutate API calls to ad platforms.
 """
@@ -12,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -283,12 +291,199 @@ def execute_web_fetch(url: str, char_limit: int = DEFAULT_CHAR_LIMIT, proxy: str
     }
 
 
-def execute_browser_extract(url: str, selector: str = "body") -> dict[str, Any]:
-    """Extract rendered content via headless Chrome CDP daemon.
-    
-    Uses CDP (Chrome DevTools Protocol) over WebSocket to navigate and extract
-    rendered DOM content. Falls back to HTTP fetch if CDP is unavailable or fails.
+def _acquire_cdp_page_target(host: str, port: int, timeout: float = 2.0) -> tuple[str, str]:
+    """Acquire an isolated CDP Page target, preferring a fresh tab via PUT /json/new.
+
+    Returns:
+        (target_id, ws_url)
+    Raises:
+        RuntimeError if no page target can be acquired.
     """
+    # 1. Try PUT /json/new to create a dedicated isolated target
+    try:
+        req = urllib.request.Request(f"http://{host}:{port}/json/new?about:blank", method="PUT")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            tid = data.get("id")
+            ws = data.get("webSocketDebuggerUrl")
+            if tid and ws:
+                return tid, ws
+    except Exception:
+        pass
+
+    # 2. Fallback to GET /json/list for existing page targets
+    try:
+        req = urllib.request.Request(f"http://{host}:{port}/json/list")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            targets = json.loads(resp.read().decode("utf-8"))
+            for t in targets:
+                if t.get("type") == "page" and t.get("webSocketDebuggerUrl"):
+                    return t.get("id", ""), t["webSocketDebuggerUrl"]
+    except Exception as exc:
+        raise RuntimeError(f"Failed to query CDP targets at http://{host}:{port}: {exc}") from exc
+
+    raise RuntimeError(f"No available Page target found on CDP endpoint http://{host}:{port}")
+
+
+def _close_cdp_page_target(host: str, port: int, target_id: str, timeout: float = 1.5) -> None:
+    """Close an isolated CDP Page target tab via PUT /json/close/<id>."""
+    if not target_id:
+        return
+    try:
+        req = urllib.request.Request(f"http://{host}:{port}/json/close/{target_id}", method="PUT")
+        with urllib.request.urlopen(req, timeout=timeout):
+            pass
+    except Exception:
+        pass
+
+
+async def _async_cdp_extract(
+    ws_url: str,
+    url: str,
+    selector: str = "body",
+    timeout: float = 15.0,
+) -> dict[str, Any]:
+    """Perform CDP commands over WebSocket with strict request-ID routing and bounded timeouts."""
+    async with websockets.connect(ws_url, ping_interval=None) as ws:
+        next_cmd_id = 1
+        pending: dict[int, asyncio.Future] = {}
+        event_queue: asyncio.Queue = asyncio.Queue()
+
+        async def send_cmd(method: str, params: dict | None = None) -> dict:
+            nonlocal next_cmd_id
+            cid = next_cmd_id
+            next_cmd_id += 1
+            fut = asyncio.get_running_loop().create_future()
+            pending[cid] = fut
+            await ws.send(json.dumps({"id": cid, "method": method, "params": params or {}}))
+            return await fut
+
+        async def reader_loop():
+            while True:
+                try:
+                    raw = await ws.recv()
+                except Exception:
+                    break
+                try:
+                    msg = json.loads(raw)
+                except Exception:
+                    continue
+                if "id" in msg and msg["id"] in pending:
+                    fut = pending.pop(msg["id"])
+                    if not fut.done():
+                        fut.set_result(msg)
+                elif "method" in msg:
+                    await event_queue.put(msg)
+
+        reader_task = asyncio.create_task(reader_loop())
+        try:
+            # 1. Enable Page and Runtime domains
+            p_res = await send_cmd("Page.enable")
+            if "error" in p_res:
+                raise RuntimeError(f"Page.enable failed: {p_res['error']}")
+            r_res = await send_cmd("Runtime.enable")
+            if "error" in r_res:
+                raise RuntimeError(f"Runtime.enable failed: {r_res['error']}")
+
+            # 2. Navigate
+            nav_res = await send_cmd("Page.navigate", {"url": url})
+            if "error" in nav_res:
+                raise RuntimeError(f"Page.navigate failed: {nav_res['error']}")
+            nav_result = nav_res.get("result", {})
+            if nav_result.get("errorText"):
+                raise RuntimeError(f"Navigation error: {nav_result['errorText']}")
+
+            # 3. Wait for load event or readyState
+            nav_deadline = time.monotonic() + min(timeout, 8.0)
+            while time.monotonic() < nav_deadline:
+                try:
+                    event = await asyncio.wait_for(event_queue.get(), timeout=0.4)
+                    if event.get("method") in ("Page.loadEventFired", "Page.domContentEventFired"):
+                        break
+                except asyncio.TimeoutError:
+                    try:
+                        doc_state = await send_cmd("Runtime.evaluate", {
+                            "expression": "document.readyState",
+                            "returnByValue": True,
+                        })
+                        st_val = doc_state.get("result", {}).get("result", {}).get("value")
+                        if st_val in ("interactive", "complete"):
+                            break
+                    except Exception:
+                        pass
+
+            # 4. Small settling delay for scripts / dynamic timers
+            await asyncio.sleep(0.15)
+
+            # 5. Extract selector and DOM text via Runtime.evaluate
+            eval_expr = (
+                f"(() => {{\n"
+                f"    const sel = {json.dumps(selector or 'body')};\n"
+                f"    const el = document.querySelector(sel);\n"
+                f"    if (!el) {{\n"
+                f"        return {{\n"
+                f"            found: false,\n"
+                f"            title: document.title || '',\n"
+                f"            error: 'Selector \"' + sel + '\" not found in rendered DOM'\n"
+                f"        }};\n"
+                f"    }}\n"
+                f"    const text = (el.innerText || el.textContent || '').trim();\n"
+                f"    return {{\n"
+                f"        found: true,\n"
+                f"        text: text,\n"
+                f"        title: document.title || '',\n"
+                f"        html: el.outerHTML || ''\n"
+                f"    }};\n"
+                f"}})()"
+            )
+            eval_res = await send_cmd("Runtime.evaluate", {
+                "expression": eval_expr,
+                "returnByValue": True,
+            })
+            if "error" in eval_res:
+                raise RuntimeError(f"Runtime.evaluate failed: {eval_res['error']}")
+
+            res_val = eval_res.get("result", {}).get("result", {}).get("value")
+            if not isinstance(res_val, dict):
+                raise RuntimeError(f"Unexpected evaluate result: {res_val}")
+            return res_val
+        finally:
+            reader_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await reader_task
+
+
+def execute_browser_extract(
+    url: str,
+    selector: str = "body",
+    host: str | None = None,
+    port: int | None = None,
+    timeout: float = 15.0,
+    char_limit: int = DEFAULT_CHAR_LIMIT,
+    check_estop: bool = True,
+) -> dict[str, Any]:
+    """Extract rendered content via headless Chrome CDP daemon.
+
+    Uses Chrome DevTools Protocol (CDP) over WebSocket to navigate, execute JavaScript,
+    and extract rendered DOM content.
+
+    Fail-closed guarantees:
+    - Never falls back silently to HTTP fetch; reports honest failure if CDP is offline.
+    - Rejects execution if ESTOP is engaged (unless explicitly bypassed for offline fixtures).
+    - Closes page target tab after extraction to prevent session residue.
+    """
+    if check_estop and pause_engaged():
+        return {
+            "url": url,
+            "title": "",
+            "content": "",
+            "status": 0,
+            "bytes_read": 0,
+            "error": "Browser extraction refused: global ESTOP is engaged",
+            "is_browser_rendered": False,
+            "blocked": False,
+        }
+
     # Check optional dependencies first
     if not WEBSOCKETS_AVAILABLE:
         return {
@@ -298,6 +493,8 @@ def execute_browser_extract(url: str, selector: str = "body") -> dict[str, Any]:
             "status": 0,
             "bytes_read": 0,
             "error": "websockets library not installed - browser extraction unavailable",
+            "is_browser_rendered": False,
+            "blocked": False,
         }
     if not BS4_AVAILABLE:
         return {
@@ -307,143 +504,131 @@ def execute_browser_extract(url: str, selector: str = "body") -> dict[str, Any]:
             "status": 0,
             "bytes_read": 0,
             "error": "beautifulsoup4 library not installed - browser extraction unavailable",
+            "is_browser_rendered": False,
+            "blocked": False,
         }
 
+    # Resolve host and port
+    if host is None or port is None:
+        cdp_env = os.environ.get("BROWSER_CDP_URL", "")
+        if cdp_env:
+            try:
+                parsed = urlsplit(cdp_env)
+                host = host or parsed.hostname or browser_daemon.DEFAULT_CDP_HOST
+                port = port or parsed.port or browser_daemon.DEFAULT_CDP_PORT
+            except Exception:
+                pass
+    host = host or browser_daemon.DEFAULT_CDP_HOST
+    port = port or browser_daemon.DEFAULT_CDP_PORT
+
     # Check if CDP daemon is ready
-    if not browser_daemon.is_cdp_ready():
-        # Fall back to HTTP fetch when CDP is not available
-        return execute_web_fetch(url)
+    if not browser_daemon.is_cdp_ready(host=host, port=port, timeout=1.0):
+        return {
+            "url": url,
+            "title": "",
+            "content": "",
+            "status": 0,
+            "bytes_read": 0,
+            "error": f"CDP browser daemon is offline or not responding at http://{host}:{port}",
+            "is_browser_rendered": False,
+            "blocked": False,
+        }
 
-    # Get the WebSocket debugger URL
-    import urllib.request
+    target_id = None
     try:
-        ver_url = "http://127.0.0.1:9222/json/version"
-        with urllib.request.urlopen(ver_url, timeout=2.0) as resp:
-            ver_data = json.loads(resp.read().decode("utf-8"))
-            ws_url = ver_data.get("webSocketDebuggerUrl")
-            if not ws_url:
-                return execute_web_fetch(url)
-    except Exception as e:
-        return execute_web_fetch(url)
+        target_id, ws_url = _acquire_cdp_page_target(host=host, port=port)
+    except Exception as exc:
+        return {
+            "url": url,
+            "title": "",
+            "content": "",
+            "status": 0,
+            "bytes_read": 0,
+            "error": f"Failed to acquire CDP page target: {exc}",
+            "is_browser_rendered": False,
+            "blocked": False,
+        }
 
-    # Connect via WebSocket and execute CDP commands
-    async def _cdp_extract() -> dict[str, Any]:
-        async with websockets.connect(ws_url) as ws:
-            # Enable Runtime domain
-            await ws.send(json.dumps({"id": 1, "method": "Runtime.enable"}))
-            await ws.recv()  # ack
-            
-            # Enable Page domain
-            await ws.send(json.dumps({"id": 2, "method": "Page.enable"}))
-            await ws.recv()  # ack
-            
-            # Navigate to URL
-            await ws.send(json.dumps({
-                "id": 3,
-                "method": "Page.navigate",
-                "params": {"url": url}
-            }))
-            
-            # Wait for navigation to complete
-            while True:
-                msg = await ws.recv()
-                data = json.loads(msg)
-                if data.get("method") == "Page.loadEventFired":
-                    break
-                if data.get("id") == 3 and "error" in data:
-                    raise RuntimeError(f"Navigation failed: {data['error']}")
-            
-            # Get document node
-            await ws.send(json.dumps({
-                "id": 4,
-                "method": "DOM.getDocument",
-                "params": {"depth": -1, "pierce": True}
-            }))
-            msg = await ws.recv()
-            data = json.loads(msg)
-            if "error" in data:
-                raise RuntimeError(f"DOM.getDocument failed: {data['error']}")
-            root_node_id = data["result"]["root"]["nodeId"]
-            
-            # Query selector
-            await ws.send(json.dumps({
-                "id": 5,
-                "method": "DOM.querySelector",
-                "params": {"nodeId": root_node_id, "selector": selector}
-            }))
-            msg = await ws.recv()
-            data = json.loads(msg)
-            if "error" in data or data.get("result", {}).get("nodeId") is None:
-                # Selector not found, fall back to body
-                selector = "body"
-                await ws.send(json.dumps({
-                    "id": 5,
-                    "method": "DOM.querySelector",
-                    "params": {"nodeId": root_node_id, "selector": selector}
-                }))
-                msg = await ws.recv()
-                data = json.loads(msg)
-            
-            node_id = data.get("result", {}).get("nodeId")
-            if node_id is None:
-                raise RuntimeError(f"Selector '{selector}' not found")
-            
-            # Get outer HTML of selected node
-            await ws.send(json.dumps({
-                "id": 6,
-                "method": "DOM.getOuterHTML",
-                "params": {"nodeId": node_id}
-            }))
-            msg = await ws.recv()
-            data = json.loads(msg)
-            if "error" in data:
-                raise RuntimeError(f"DOM.getOuterHTML failed: {data['error']}")
-            outer_html = data["result"]["outerHTML"]
-            
-            # Also get page title
-            await ws.send(json.dumps({"id": 7, "method": "Runtime.evaluate", "params": {"expression": "document.title"}}))
-            msg = await ws.recv()
-            data = json.loads(msg)
-            title = data.get("result", {}).get("result", {}).get("value", "")
-            
-            # Extract text content from HTML (simple extraction)
-            soup = BeautifulSoup(outer_html, "html.parser")
-            text = soup.get_text(separator="\n", strip=True)
-
-            is_bot, bot_reason = detect_access_block(200, text, title)
-            if is_bot:
-                return {
-                    "url": url,
-                    "title": title,
-                    "content": "",
-                    "status": 403,
-                    "bytes_read": len(text),
-                    "error": f"Access blocked: {bot_reason}",
-                    "blocked": True,
-                    "pivot_guidance": (
-                        f"Target URL {url} presented an anti-bot verification challenge ({bot_reason}). "
-                        "DO NOT attempt to re-fetch this exact URL. Formulate alternative web_search queries "
-                        "targeting third-party reviews, news coverage, directory profiles (G2, Capterra, GitHub, SEC filings), "
-                        "or competitor comparisons."
-                    ),
-                }
-
-            return {
-                "url": url,
-                "title": title,
-                "content": text,
-                "status": 200,
-                "bytes_read": len(text),
-                "error": "",
-                "blocked": False,
-            }
-
-    # Run async function
     try:
-        return asyncio.run(_cdp_extract())
-    except Exception as e:
-        # Fall back to HTTP fetch on any CDP error
-        return execute_web_fetch(url)
+        res_data = asyncio.run(asyncio.wait_for(
+            _async_cdp_extract(ws_url=ws_url, url=url, selector=selector, timeout=timeout),
+            timeout=timeout + 2.0,
+        ))
+    except asyncio.TimeoutError:
+        return {
+            "url": url,
+            "title": "",
+            "content": "",
+            "status": 504,
+            "bytes_read": 0,
+            "error": f"Browser extraction timed out after {timeout:.1f}s",
+            "is_browser_rendered": False,
+            "blocked": False,
+        }
+    except Exception as exc:
+        return {
+            "url": url,
+            "title": "",
+            "content": "",
+            "status": 0,
+            "bytes_read": 0,
+            "error": f"Browser extraction failed: {exc}",
+            "is_browser_rendered": False,
+            "blocked": False,
+        }
+    finally:
+        if target_id:
+            _close_cdp_page_target(host=host, port=port, target_id=target_id)
+
+    if not res_data.get("found"):
+        return {
+            "url": url,
+            "title": res_data.get("title", ""),
+            "content": "",
+            "status": 404,
+            "bytes_read": 0,
+            "error": res_data.get("error", f"Selector '{selector}' not found in rendered DOM"),
+            "is_browser_rendered": True,
+            "blocked": False,
+        }
+
+    text = res_data.get("text", "")
+    title = res_data.get("title", "")
+
+    is_bot, bot_reason = detect_access_block(200, text, title)
+    if is_bot:
+        return {
+            "url": url,
+            "title": title,
+            "content": "",
+            "status": 403,
+            "bytes_read": len(text.encode("utf-8")),
+            "error": f"Access blocked: {bot_reason}",
+            "blocked": True,
+            "is_browser_rendered": True,
+            "pivot_guidance": (
+                f"Target URL {url} presented an anti-bot verification challenge ({bot_reason}). "
+                "DO NOT attempt to re-fetch this exact URL. Formulate alternative web_search queries "
+                "targeting third-party reviews, news coverage, directory profiles (G2, Capterra, GitHub, SEC filings), "
+                "or competitor comparisons."
+            ),
+        }
+
+    if len(text) > char_limit:
+        head = char_limit * 2 // 3
+        tail = char_limit - head
+        text = text[:head] + "\n\n[...TRUNCATED FOR LENGTH...]\n\n" + text[-tail:]
+
+    return {
+        "url": url,
+        "title": title,
+        "content": text,
+        "status": 200,
+        "bytes_read": len(text.encode("utf-8")),
+        "error": "",
+        "is_browser_rendered": True,
+        "blocked": False,
+    }
 
 
 NATIVE_TOOLS = [
@@ -824,14 +1009,20 @@ def run_native_research_turn(
             if name in ("web_fetch", "browser_extract") and "url" in args:
                 try:
                     res_data = json.loads(result_str)
-                    st = res_data.get("status", 200)
-                    is_err = st >= 400 or bool(res_data.get("blocked"))
+                    st = res_data.get("status", 0)
+                    content = str(res_data.get("content") or "").strip()
+                    is_blocked = bool(res_data.get("blocked"))
+                    has_error = bool(res_data.get("error"))
+                    # Verified evidence requires: valid 2xx/3xx HTTP status, not blocked, no error, and non-empty content
+                    is_ok = (200 <= st < 400) and not is_blocked and not has_error and bool(content)
+                    is_err = not is_ok
                     fetched_evidence.append({
                         "url": args["url"],
-                        "http_status": 403 if res_data.get("blocked") and st < 400 else st,
-                        "classification": "ERROR" if is_err else "OK",
-                        "reachable_on_host": not is_err,
+                        "http_status": 403 if is_blocked else (st if st > 0 else 500),
+                        "classification": "OK" if is_ok else ("BLOCKED" if is_blocked else "ERROR"),
+                        "reachable_on_host": is_ok,
                         "worker_policy_permitted": True,
+                        "content_length": len(content),
                     })
                     if is_err:
                         import policy_manager

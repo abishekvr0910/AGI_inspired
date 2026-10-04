@@ -57,14 +57,14 @@ Key reasons for this sequence:
 | --- | --- | --- | --- | --- |
 | P0-A | Gemini | None | Honest sample inventory, safe cleanup, truthful generator | COMPLETED |
 | P0-B | Gemini | P0-A | Evidence-bound, complete client exports | COMPLETED |
-| P1-C | Codex or another forward engineer | None; isolated from A/B | Real browser and bounded research path verification | PENDING |
+| P1-C | Codex or another forward engineer | None; isolated from A/B | Real browser and bounded research path verification | COMPLETED |
 | P1-D | Gemini or UI engineer | P0-B; P1-C before integration | Actual browser console acceptance | PENDING |
 | P1-E | Codex or data engineer | Coordinate runner edits with P1-C | Honest outcome and cost measurement | PENDING |
 | P1-F | Forward engineer + operator | A-E reviewed; data and live authority | One client pilot with reviewed outputs | PENDING |
 | P1-G | Independent reviewer + deployment engineer | Read-only review can start now | Release and deployment evidence | PENDING |
 
-Start P1-C next (or P1-D / P1-E in parallel if isolated). P1-C can proceed in an isolated worktree.
-P1-E can proceed independently only if its path ownership does not overlap C.
+Start P1-D or P1-E next. P1-D tests browser console acceptance; P1-E reconciles outcome and cost accounting.
+P1-E can proceed independently only if its path ownership does not overlap.
 Do not start additional frameworks, subagent fleets, dashboard redesigns, or
 partner integrations until the accepted workflow exposes a concrete need.
 
@@ -196,6 +196,14 @@ Verification: existing `test_native_worker`, `test_browser_daemon`,
 `test_hypothesis_deep_loop`, `test_deliverable_preflight`, `test_research_notebook`
 plus a real local browser regression under the appropriate tier, then full gate.
 Mocks support unit coverage; actual browser proof must be separately identified.
+
+**Status: COMPLETED (2026-10-04)**
+- Real Chrome CDP Extraction: Hardened `orchestrator/native_worker.py` with `_acquire_cdp_page_target` (isolated tab acquisition via `PUT /json/new`, closing via `PUT /json/close/<id>`), asynchronous message-ID routing over WebSocket (`_async_cdp_extract`), JavaScript-rendered text extraction via `Runtime.evaluate`, and fail-closed error handling (no silent HTTP fallback as browser extraction).
+- Fail-Closed Containment & Timeout Bounds: Added timeout bounds with status 504 on hanging requests, explicit 404 for absent selectors without silent HTTP fallback, honest status 0 on unreachable navigation, zero orphan tab leakage across sessions, and immediate ESTOP rejection.
+- Evidence Gating Hardening: Updated `run_native_research_turn` evidence classification to require non-empty content, valid 2xx HTTP status, no access block, and no error before classifying evidence as `OK`. Errors and blocks are classified as `ERROR`/`BLOCKED` and stored in notebook `dead_sources`.
+- Containment Architecture Note: Documented Native vs Hermes runtime boundary in `orchestrator/native_worker.py` docstring (Native runs in-process within the Python controller without OS Job Objects/Restricted Tokens; browser runs out-of-process via loopback CDP).
+- Real Browser Regression Suite: Added `tests/test_browser_real.py` (8/8 PASS) validating real Chrome JS rendering on ephemeral loopback fixture, HTTP non-rendering proof, absent selector fail-closed behavior, tab isolation, timeout bounds, navigation errors, ESTOP interruption, and evidence gating. Registered in `tests/tiers.json` under `integration`.
+- Test Gate: Canonical model-free test gate expanded to 104/104 suites green (unit 88, containment 8, integration 8, exit 0). ESTOP strictly engaged.
 
 ## 7. P1-D: Console Acceptance in a Browser
 

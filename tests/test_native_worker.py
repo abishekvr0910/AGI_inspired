@@ -81,13 +81,15 @@ class NativeWorkerTests(unittest.TestCase):
             self.assertEqual(res["title"], "Apex Pros")
             self.assertIn("Roof inspections.", res["content"])
 
-    def test_browser_extract_fallback(self):
-        """execute_browser_extract cleanly falls back to web_fetch when CDP is offline."""
+    def test_browser_extract_offline_refuses_silent_fallback(self):
+        """execute_browser_extract fails closed with honest error when CDP is offline, refusing silent HTTP fallback."""
         with patch("browser_daemon.is_cdp_ready", return_value=False):
-            with patch("native_worker.execute_web_fetch", return_value={"url": "https://example.com", "status": 200}) as mock_fetch:
-                res = native_worker.execute_browser_extract("https://example.com")
-                self.assertEqual(res["status"], 200)
-                mock_fetch.assert_called_once_with("https://example.com")
+            with patch("native_worker.execute_web_fetch") as mock_fetch:
+                res = native_worker.execute_browser_extract("https://example.com", check_estop=False)
+                self.assertEqual(res["status"], 0)
+                self.assertFalse(res.get("is_browser_rendered", True))
+                self.assertIn("offline", res["error"].lower())
+                mock_fetch.assert_not_called()
 
     def test_dispatch_tool_call(self):
         """dispatch_tool_call routes to search, fetch, and browser tools."""
@@ -448,73 +450,54 @@ class NativeWorkerTests(unittest.TestCase):
         with patch("browser_daemon.is_cdp_ready", return_value=True):
             with patch("urllib.request.urlopen") as mock_urlopen:
                 mock_resp = MagicMock()
-                mock_resp.read.return_value = json.dumps({"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/123"}).encode()
+                mock_resp.read.return_value = json.dumps({"id": "tab1", "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/tab1"}).encode()
                 mock_resp.__enter__.return_value = mock_resp
                 mock_urlopen.return_value = mock_resp
                 
-                # Mock the websocket connection and CDP flow
-                mock_ws = MagicMock()
-                mock_ws.__aenter__.return_value = mock_ws
-                mock_ws.__aexit__.return_value = None
-                
-                # Mock websocket responses for CDP flow
-                responses = [
-                    json.dumps({"id": 1, "result": {}}),  # Runtime.enable ack
-                    json.dumps({"id": 2, "result": {}}),  # Page.enable ack
-                    json.dumps({"method": "Page.loadEventFired"}),  # Navigation complete
-                    json.dumps({"id": 4, "result": {"root": {"nodeId": 1}}}),  # DOM.getDocument
-                    json.dumps({"id": 5, "result": {"nodeId": 2}}),  # DOM.querySelector
-                    json.dumps({"id": 6, "result": {"outerHTML": "<html><body><h1>Test</h1></body></html>"}}),  # DOM.getOuterHTML
-                    json.dumps({"id": 7, "result": {"result": {"result": {"value": "Test Title"}}}}),  # Runtime.evaluate
-                ]
-                mock_ws.recv.side_effect = responses
-                
-                with patch("websockets.connect", return_value=mock_ws):
-                    with patch("asyncio.run") as mock_run:
-                        mock_run.return_value = {
-                            "url": "https://example.com",
-                            "title": "Test Title",
-                            "content": "Test content from CDP",
-                            "status": 200,
-                            "bytes_read": 100,
-                            "error": "",
-                        }
-                        res = native_worker.execute_browser_extract("https://example.com", "h1")
-                        
-                        # Verify CDP was attempted (asyncio.run called)
-                        mock_run.assert_called_once()
-                        # Verify result is from CDP
-                        self.assertEqual(res["title"], "Test Title")
+                with patch("asyncio.run") as mock_run:
+                    mock_run.return_value = {
+                        "found": True,
+                        "title": "Test Title",
+                        "text": "Test content from CDP",
+                        "html": "<html><body><h1>Test</h1></body></html>",
+                    }
+                    res = native_worker.execute_browser_extract("https://example.com", "h1", check_estop=False)
+                    mock_run.assert_called_once()
+                    self.assertEqual(res["title"], "Test Title")
+                    self.assertEqual(res["status"], 200)
+                    self.assertTrue(res["is_browser_rendered"])
 
     def test_browser_extract_fails_when_dependencies_missing(self):
         """execute_browser_extract returns error when websockets or bs4 not available."""
         with patch("native_worker.WEBSOCKETS_AVAILABLE", False):
             with patch("browser_daemon.is_cdp_ready", return_value=True):
-                res = native_worker.execute_browser_extract("https://example.com")
+                res = native_worker.execute_browser_extract("https://example.com", check_estop=False)
                 self.assertEqual(res["status"], 0)
                 self.assertIn("websockets library not installed", res["error"])
         
         with patch("native_worker.BS4_AVAILABLE", False):
             with patch("browser_daemon.is_cdp_ready", return_value=True):
-                res = native_worker.execute_browser_extract("https://example.com")
+                res = native_worker.execute_browser_extract("https://example.com", check_estop=False)
                 self.assertEqual(res["status"], 0)
                 self.assertIn("beautifulsoup4 library not installed", res["error"])
 
-    def test_browser_extract_cdp_error_fallbacks_to_http(self):
-        """execute_browser_extract falls back to HTTP fetch when CDP fails."""
+    def test_browser_extract_cdp_error_fails_closed(self):
+        """execute_browser_extract fails closed with honest error when CDP fails, refusing silent HTTP fallback."""
         with patch("browser_daemon.is_cdp_ready", return_value=True):
             with patch("urllib.request.urlopen") as mock_urlopen:
                 mock_resp = MagicMock()
-                mock_resp.read.return_value = json.dumps({"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/123"}).encode()
+                mock_resp.read.return_value = json.dumps({"id": "tab1", "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/tab1"}).encode()
                 mock_resp.__enter__.return_value = mock_resp
                 mock_urlopen.return_value = mock_resp
                 
                 with patch("websockets.connect", side_effect=Exception("WebSocket connection failed")):
-                    with patch("native_worker.execute_web_fetch", return_value={"url": "https://example.com", "title": "HTTP Title", "content": "HTTP content", "status": 200, "bytes_read": 50, "error": ""}) as mock_fetch:
-                        res = native_worker.execute_browser_extract("https://example.com")
-                        # Should fall back to HTTP fetch
-                        mock_fetch.assert_called_once_with("https://example.com")
-                        self.assertEqual(res["title"], "HTTP Title")
+                    with patch("native_worker.execute_web_fetch") as mock_fetch:
+                        res = native_worker.execute_browser_extract("https://example.com", check_estop=False)
+                        # Must fail closed without falling back to HTTP fetch
+                        self.assertEqual(res["status"], 0)
+                        self.assertFalse(res["is_browser_rendered"])
+                        self.assertIn("failed", res["error"].lower())
+                        mock_fetch.assert_not_called()
 
     def test_enforce_active_research_reprompts_on_zero_tools(self):
         """enforce_active_research re-prompts the model on turn 0 if it tries to answer without tools."""

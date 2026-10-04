@@ -1,25 +1,25 @@
 {
   "schema_version": 2,
-  "brief_revision": 178,
-  "created_at": "2026-10-04T14:29:54.816382+00:00",
+  "brief_revision": 179,
+  "created_at": "2026-10-04T16:15:00.000000+00:00",
   "status": "completed",
   "repository": {
     "branch": "master",
     "upstream": "origin/master",
     "tree_clean": true,
     "changed_paths": [],
-    "based_on_head": "18253ff79c46a1c4557cd987d6237dcf3900cd3e"
+    "based_on_head": "869b7aa5716978bd3f60f0cab579468de5d80166"
   },
   "task": {
-    "id": "PRODUCT-P0-B-2026-10-04",
-    "phase": "evidence_and_complete_client_packages",
+    "id": "PRODUCT-P1-C-2026-10-04",
+    "phase": "browser_and_research_correctness",
     "status": "completed",
-    "next_action": "Claim PRODUCT-P1-C-2026-10-04 or P1-D / P1-E from docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md."
+    "next_action": "Claim PRODUCT-P1-D-2026-10-04 or P1-E from docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md."
   },
   "completed": [
-    "Landed evidence-bound client packages: is_valid_evidence() in evidence_gate.py requires real claim values, non-empty sources/reviewers, dates; optional waste estimates require authorized account extract references.",
-    "Bound approvals to SHA256 content digests (approved_content_hash); post-approval mutations fail closed. Deliverable completeness gating blocks unverified client exports (EXPORT_BLOCKED) while allowing marked internal drafts (allow_draft=True).",
-    "Removed contractor boilerplate from campaign_builder.py, added language-aware neutral copy, enforced Status: Paused across 100% of CSV rows. Remediated el-shaddai-coffee-katowice to unapproved export status. Added tests/test_evidence_gate.py (8/8 PASS). Gate 103/103 green."
+    "Hardened Native CDP browser extraction (orchestrator/native_worker.py): isolated tab acquisition (_acquire_cdp_page_target via PUT /json/new), tab closure (_close_cdp_page_target via PUT /json/close/<id>), message-ID routing over WebSocket (_async_cdp_extract), JS DOM extraction via Runtime.evaluate, fail-closed handling without silent HTTP fallback, bounded timeout handling, unreachable navigation handling, and ESTOP checks.",
+    "Enforced research evidence classification: run_native_research_turn requires valid 2xx status, non-empty content, no access blocks, and no errors before marking OK; failures classified as ERROR/BLOCKED and recorded to notebook dead_sources. Documented Native in-process vs Hermes subprocess containment boundaries.",
+    "Added tests/test_browser_real.py (8/8 PASS) validating real Chrome JS rendering on ephemeral loopback fixture, HTTP non-rendering proof, absent selector fail-closed behavior, tab isolation, timeout bounds, navigation errors, ESTOP interruption, and evidence gating; registered in tests/tiers.json integration tier. Gate 104/104 green."
   ],
   "locked_constraints": [
     "ESTOP engaged; no live provider calls or cohort without an explicit operator window.",
@@ -29,12 +29,12 @@
   ],
   "gate": {
     "status": "passed",
-    "detail": "103/103 suites passed (unit 88, containment 8, integration 7), exit 0. No live calls. ESTOP strictly engaged."
+    "detail": "104/104 suites passed (unit 88, containment 8, integration 8), exit 0. No live calls. ESTOP strictly engaged."
   },
   "references": [
     {
       "path": "docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md",
-      "sha256": "5560485ba1f7a42236a4f431a2f755a71bc09418ea579af726c724ac779c9116"
+      "sha256": "210588712130646e5e34544ebb2ce3e7c7f313d23041f6161d6bea34a63b585f"
     },
     {
       "path": "docs/reviews/CODEX_PRODUCT_REVIEW_2026-10-04.md",
@@ -42,23 +42,23 @@
     },
     {
       "path": "docs/CURRENT_STATE.md",
-      "sha256": "3a4121e566656ce87c7ebfb150630e9b10d184fe7ddaade710de08dc688611f9"
+      "sha256": "b58f1fd0cc24d2f2032c24f4cc52141c698eca2a189e710bc05185848127599b"
     },
     {
       "path": "docs/ACTIVE_WORK.json",
-      "sha256": "70adb358dcceecb9166b71822faf0e57f9eb4b6608d7da69d737e6cd8b65fa47"
+      "sha256": "056ca3527abab840b8c06c7226e700a983daba92f19fe4b82e810998184d411b"
     },
     {
       "path": "docs/README.md",
       "sha256": "296cd4463ad49d01627b392bf1e957e5e14bc5d2a1498b10798be6e4146712bf"
     },
     {
-      "path": "orchestrator/evidence_gate.py",
-      "sha256": "85e45a25c515e6c0fc6b2a78d895b74c014ec61e953c0afc41e0f2a6ae7d0a36"
+      "path": "orchestrator/native_worker.py",
+      "sha256": "944e0e26ef9f545cb54e9183f320c7eeaf350b010d85389d82fa3d071a447174"
     },
     {
-      "path": "tests/test_evidence_gate.py",
-      "sha256": "a23f412bc1989a2990484eb066a25b3d4d7de9aa7c735b618b1e3962ecf8fe0d"
+      "path": "tests/test_browser_real.py",
+      "sha256": "9e749d86565689f7829c7428901d92440e68ba4830f5a8d3100d910d1836b753"
     }
   ]
 }

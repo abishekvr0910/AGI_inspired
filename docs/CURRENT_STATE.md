@@ -22,7 +22,7 @@ Eight samples still have Ready to Send tracker entries and misleading stored
 artifacts. The sole record marked verified has incomplete research and generic
 service-business ad copy for a coffee client. See the review for exact evidence.
 
-Next action: claim P1-C (verify browser rendering and research correctness).
+Next action: claim P1-D (browser console acceptance) or P1-E (honest outcome and cost measurement).
 P0-A (truthful sample generation and safe artifact remediation) is COMPLETED.
 P0-B (evidence-bound, complete client packages) is COMPLETED:
 - `orchestrator/evidence_gate.py`: Distinguishes verified prospect identity from verified deliverable content; validates real claim values and non-empty sources/reviewers; supports optional ad waste estimates requiring authorized account extracts; checks required research sections (`keyword_research`, `negative_keyword_harvest`, `ad_copy_variants`); and binds approvals to cryptographic content hashes (`approved_content_hash`) with automatic fail-closed invalidation upon post-approval profile or deliverable mutations.
@@ -30,8 +30,13 @@ P0-B (evidence-bound, complete client packages) is COMPLETED:
 - `orchestrator/client_reporter.py`: Blocks client-ready exports on incomplete research deliverables (`EXPORT_BLOCKED`); allows generating visibly marked internal drafts (`allow_draft=True`) with prominent draft warnings and `[DRAFT]` campaign names.
 - `workspace/clients/el-shaddai-coffee-katowice/`: Verified identity claims with honest evidence; unapproved for client export due to pending research sections; internal draft generated with neutral Polish copy and `Status: Paused`.
 - `tests/test_evidence_gate.py`: Added 8 comprehensive regression tests (8/8 PASS); registered in `tests/tiers.json` under `unit`.
-Test gate expanded to 103/103 suites green (88 unit, 8 containment, 7 integration, exit 0).
-P1-C through P1-G cover browser/research proof, console acceptance, measurement, a consented pilot, and independent release/deployment evidence. All other implementation packages remain PENDING.
+P1-C (browser rendering and bounded research path verification) is COMPLETED:
+- `orchestrator/native_worker.py`: Hardened CDP extraction with dedicated tab acquisition (`_acquire_cdp_page_target` via `PUT /json/new`), request-ID routing over WebSocket (`_async_cdp_extract`), JavaScript-rendered text extraction via `Runtime.evaluate`, fail-closed error handling (no silent HTTP fallback as browser extraction), bounded timeout handling (504), honest status 0 on unreachable navigation, tab cleanup in `finally` (`_close_cdp_page_target`), and ESTOP checks.
+- Evidence Classification: In `run_native_research_turn`, enforced that evidence is classified as `OK` only when HTTP status is 2xx/3xx, content is non-empty, not blocked, and no error occurred. Failed extractions are categorized as `ERROR`/`BLOCKED` and persisted to research notebook `dead_sources`.
+- Containment Documentation: Documented Native vs Hermes runtime boundary in `native_worker.py` docstring (Native runs in-process within the Python controller without OS Job Objects/Restricted Tokens; browser runs out-of-process via loopback CDP).
+- Real Browser Regression Suite: Added `tests/test_browser_real.py` (8/8 PASS) validating real Chrome JS rendering on ephemeral loopback fixture, HTTP non-rendering proof, absent selector fail-closed behavior, tab isolation, timeout bounds, navigation errors, ESTOP interruption, and evidence gating. Registered in `tests/tiers.json` under `integration`.
+Test gate expanded to 104/104 suites green (88 unit, 8 containment, 8 integration, exit 0).
+P1-D through P1-G cover console acceptance, measurement, a consented pilot, and independent release/deployment evidence. All other implementation packages remain PENDING.
 No new live window, credential write, policy widening, outreach, ad publication,
 or push is authorized by this plan. Historical implementation notes follow.
 
