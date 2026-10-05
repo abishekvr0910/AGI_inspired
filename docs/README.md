@@ -2,10 +2,12 @@
 
 ## Active Product Work
 
-Start with [Product Completion Plan](PRODUCT_COMPLETION_PLAN_2026-10-04.md)
-for the ordered P0-A through P1-G backlog, suggested agent assignments, file
-scopes, acceptance checks, and copy-paste handoffs. All implementation packages
-are pending until their owners record completion evidence.
+Start with the [Full Harness Completion Directive](HARNESS_COMPLETION_DIRECTIVE_2026-10-05.md)
+for the current ordered work, independently reproduced consumer failures,
+acceptance matrix, agent roles and operator-only release/pilot boundaries.
+It is the single active completion directive; the
+[Product Completion Plan](PRODUCT_COMPLETION_PLAN_2026-10-04.md) retains detailed
+P0-A through P1-G requirements and historical implementation records.
 The [Codex Product Review](reviews/CODEX_PRODUCT_REVIEW_2026-10-04.md) records
 the independently measured baseline and current delivery gaps. These documents
 supersede earlier readiness ratings and next-action suggestions, not AGENTS.md
@@ -48,7 +50,7 @@ These runbooks detail the production setup, OS identity hardening, and deploymen
 ## 3. Review & Audit Dossiers (`docs/reviews/`)
 
 The [`docs/reviews/`](reviews/) directory contains all point-in-time adversarial peer reviews, verification reports, and formal audits produced during development sprints:
-* **Latest Formal Audit:** [`docs/reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md`](reviews/GEMINI_AUDIT_AND_REVIEW_2026-10-02.md)
+* **Latest Formal Audit:** [`docs/reviews/HERMES_STAGE4_VERTICAL_SLICE_REVIEW_2026-10-05.md`](reviews/HERMES_STAGE4_VERTICAL_SLICE_REVIEW_2026-10-05.md)
 * **Historical Review Log:** All past agent reviews from August–October 2026 are consolidated here for tamper-evident provenance.
 
 ---
