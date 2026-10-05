@@ -1,65 +1,67 @@
 {
-  "schema_version": 2,
-  "brief_revision": 182,
-  "created_at": "2026-10-04T17:10:00.000000+00:00",
+ "schema_version": 2,
+ "brief_revision": 193,
+ "created_at": "2026-10-05T22:04:00+00:00",
+ "status": "completed",
+ "repository": {
+  "branch": "master",
+  "upstream": "origin/master",
+  "tree_clean": true,
+  "changed_paths": [],
+  "based_on_head": "54223a376ccf73f5ea15e4c41d23aea3fcf45edb"
+ },
+ "task": {
+  "id": "STAGE5-CLEAN-TREE-INTEGRATION-2026-10-06",
+  "phase": "integration_complete",
   "status": "completed",
-  "repository": {
-    "branch": "master",
-    "upstream": "origin/master",
-    "tree_clean": true,
-    "changed_paths": [],
-    "based_on_head": "728daa8aa627369d2b73e74e525063ac53872a81"
+  "next_action": "Stage 6: Attest worker egress boundary and enable off-machine audit retention."
+ },
+ "completed": [
+  "107/107 full gate green (89 unit, 8 containment, 10 integration, exit 0). Stage 4 complete.",
+  "Committed C1-C5 runtime contracts, Stage 4 vertical-slice suite, and review dossiers on master.",
+  "Tree clean. 299 monitored artifacts unchanged. ESTOP engaged. Write ownership released."
+ ],
+ "locked_constraints": [
+  "Keep ESTOP engaged; no live provider/cohort without controlled-window authority.",
+  "No provisioning, policy widening, outreach, ad publication, commit or push.",
+  "Preserve dirty implementation and client artifacts completely untouched."
+ ],
+ "gate": {
+  "status": "passed",
+  "detail": "107/107 suites, exit 0. Stage 4 vertical-slice 5/5 pass, zero skips."
+ },
+ "references": [
+  {
+   "path": "docs/HARNESS_COMPLETION_DIRECTIVE_2026-10-05.md",
+   "sha256": "d0eba72ecffc02d7da0b2db1d64ca4601a1b49724b56a592aa9204f1a7a009b8"
   },
-  "task": {
-    "id": "PRODUCT-P1-F-AND-G-2026-10-04",
-    "phase": "pilot_preparation_and_release_evidence",
-    "status": "completed",
-    "next_action": "Independent verification by Codex via docs/reviews/CODEX_VERIFICATION_BRIEF_2026-10-04.md and operator window authorization for consented pilot execution."
+  {
+   "path": "docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md",
+   "sha256": "9d37d5000de59e27afe4d17e3d6438930fca44d9324b7da12520fbcbeb4047a3"
   },
-  "completed": [
-    "Model-free pilot preparation landed for consented client el-shaddai-coffee-katowice in workspace/pilots/consented_pilot_spec_20261004.json and workspace/pilots/PILOT_SCORING_SHEET_2026-10-04.md (held-out task list, token/cost cap 100k/$1.00 USD, boundary governance, Polish ad relevance, stop conditions).",
-    "Hardened orchestrator/distribution.py to block unapproved client exports with EXPORT_BLOCKED while supporting explicit --allow-draft for marked internal drafts. Verified model-free dry runs execute with exit 0.",
-    "Release preflight evaluated via orchestrator/operator_cli.py preflight release --json: verified full model-free test gate green at 106/106 suites (unit 89, containment 8, integration 9, exit 0) and recorded 4 explicit blockers with assigned ownership (quiescence, git sync, egress attestation, off-machine audit retention).",
-    "Authored comprehensive verification brief and empirical reproduction runbook for Codex in docs/reviews/CODEX_VERIFICATION_BRIEF_2026-10-04.md covering all 7 packages (P0-A through P1-G). ESTOP strictly engaged."
-  ],
-  "locked_constraints": [
-    "ESTOP engaged; no live provider calls or cohort without an explicit operator window.",
-    "No credential provisioning, policy widening, outreach, publication, ad spend or push.",
-    "Preserve runtime artifacts; no guessed costs, fabricated evidence or changed historical verdicts.",
-    "All exported campaigns default strictly to Status: Paused; no ad platform calls."
-  ],
-  "gate": {
-    "status": "passed",
-    "detail": "106/106 suites passed (unit 89, containment 8, integration 9), exit 0. No live calls. ESTOP strictly engaged."
+  {
+   "path": "docs/CURRENT_STATE.md",
+   "sha256": "c9fb4e4fecb88112635767480deb8fb3d72eeb32d47104a4bf8f9cdd4bf3b0e0"
   },
-  "references": [
-    {
-      "path": "docs/PRODUCT_COMPLETION_PLAN_2026-10-04.md",
-      "sha256": "2627991f5a675352090d3f0686a58ac0ff3982ee58af006a64a47184cb83d3be"
-    },
-    {
-      "path": "docs/reviews/CODEX_VERIFICATION_BRIEF_2026-10-04.md",
-      "sha256": "c3fb076d21fcf8beed95abe5699743a3204f189e9aaf49ae13f3d5514e6061ad"
-    },
-    {
-      "path": "docs/CURRENT_STATE.md",
-      "sha256": "f8f8baccd4e0697e861f679586e5f39a919a3ce193e50905d0208b0b60074763"
-    },
-    {
-      "path": "docs/ACTIVE_WORK.json",
-      "sha256": "4d3f5264e4c3444f0cf1dee9051cc8318193808f70f7bea17ec904584ebeac30"
-    },
-    {
-      "path": "docs/README.md",
-      "sha256": "296cd4463ad49d01627b392bf1e957e5e14bc5d2a1498b10798be6e4146712bf"
-    },
-    {
-      "path": "orchestrator/distribution.py",
-      "sha256": "a6b09969c46bd4b1772610bfd27ebd2a5bab7d1a19f1be955eb3546d3047b22b"
-    },
-    {
-      "path": "workspace/pilots/consented_pilot_spec_20261004.json",
-      "sha256": "0d35c004119255fbafc4cd528f02d81a33754b0a8359b0154dd85a8e6444745e"
-    }
-  ]
+  {
+   "path": "docs/ACTIVE_WORK.json",
+   "sha256": "f3f75699ecfd960989e4ca4f2935b08d35c7c02a418ad29f7fd137447782123f"
+  },
+  {
+   "path": "orchestrator/execution.py",
+   "sha256": "c4b5bbf7071655a8a8304e52bb9d5c61b6b63f83a90c50b1bb17c8727011b209"
+  },
+  {
+   "path": "orchestrator/budget_controller.py",
+   "sha256": "607f3e14c2f8a565c20ac740bf1396a27e9a819a8556124e19b6cdf7319c8646"
+  },
+  {
+   "path": "orchestrator/cost_accounting.py",
+   "sha256": "fdce37e8033237227b923202a8f0eaf3680d643bc179276bf5110b6a5f8060ad"
+  },
+  {
+   "path": "orchestrator/ledger.py",
+   "sha256": "3011461a9126ede4f4f91067a166462bc1076a991accaee7c5edef261eaa351b"
+  }
+ ]
 }
