@@ -55,8 +55,8 @@ def queue_task(mission_id: str, spec: str, pass_criteria: str) -> int:
     """Create a task with pre-written pass criteria. Returns task_id."""
     with _conn() as c:
         cur = c.execute(
-            "INSERT INTO tasks (mission_id, spec, pass_criteria, status, run_id) "
-            "VALUES (?,?,?,'queued',?)",
+            "INSERT INTO tasks (mission_id, spec, pass_criteria, status, run_id, cost_usd) "
+            "VALUES (?,?,?,'queued',?,NULL)",
             (mission_id, spec, pass_criteria, RUN_ID),
         )
         return cur.lastrowid
@@ -118,64 +118,46 @@ def start_task(task_id: int, model_used: str) -> None:
             )
 
 
-def finish_task(task_id: int, *, artifacts, cost_usd=None, tokens_in=None, tokens_out=None,
+_UNSET = object()
+
+
+def finish_task(task_id: int, *, artifacts, cost_usd=_UNSET, tokens_in=None, tokens_out=None,
                 critic_verdict=None, critic_notes=None, status="done",
                 interventions=None, intervention_types=None, append_note=False,
                 attempt_count=None) -> None:
-    """F21 (docs/HARDENING.md): consumption columns default to None and are written
-    via COALESCE, so OMITTING them preserves whatever a previous attempt recorded.
-
-    They used to default to 0/0.0 and overwrite unconditionally. Every failure path
-    here (timeout, quota park, infra_failed, short-output) omits them, so RETRYING a
-    task silently erased the original run's accounting. Measured live 2026-07-28:
-    task 24 held tokens_in=1,781,395 from its first run; a retry that timed out reset
-    it to 0 and the daily counter fell 10,786,463 -> 9,001,225 -- exactly that amount.
-    The consequence is backwards from safe: policy.tokens_used_today() sums this
-    column, so every retry made the daily budget guard protect LESS, and real spend
-    from a timed-out run (which burns tokens without returning a usage file) vanished
-    from the record entirely. cost_usd carries the identical defect and is fixed in
-    the same line -- it is inert only while Ollama reports $0, and would start
-    silently erasing real money the day a paid key is added (F17->F19's lesson: fix
-    the bug class, not the one instance you happened to measure).
-
-    critic_verdict is COALESCEd for the same reason, and it is the part that actually
-    broke the loop: an INFRA failure says nothing about content, but by writing NULL it
-    erased the previous review verdict -- and run_task()'s retry-with-feedback block is
-    gated on `critic_verdict == 'fail'`, so the next attempt silently lost the reviewer's
-    objections. Measured live 2026-07-28: task 24's timeout turned verdict 'fail' +337
-    chars of specific objections into NULL + 'worker timeout'. Callers that genuinely
-    have a new verdict still pass one and still overwrite. Infra paths should pass
-    append_note=True so their marker is added to the review history rather than
-    replacing it."""
-    # F22b (docs/HARDENING.md): only a TERMINAL status finishes a task. Parking
-    # (quota_wait) or re-queueing is not an ending, and stamping finished_at for one
-    # silently re-dates the spend it already carries. Found immediately after shipping
-    # F22 + F21 together, by running them: parking task 26 (which holds 8,517,508 tokens
-    # from its 2026-07-27 run) re-stamped finished_at to today, and because F22 makes
-    # tokens_used_today() sum on finished_at, last Monday's spend was re-attributed to
-    # tonight -- the counter jumped 7,219,268 -> 15,743,736 with nothing executed, past a
-    # 12M cap. Two individually-correct fixes composed into a wrong one; the guard would
-    # then refuse all further work on entirely fictional consumption.
+    """F21 (docs/HARDENING.md) & R6: consumption columns default to None and are written
+    safely. Omitting cost_usd preserves existing cost; explicitly passing cost_usd (including None)
+    updates cost_usd directly, persisting NULL when cost is unknown rather than coercing to 0.0."""
     stamp = (utc_iso()
              if status in TERMINAL_STATUSES else None)
     with _conn() as c:
+        if cost_usd is _UNSET:
+            cost_clause = "cost_usd=cost_usd"
+            params = [
+                status, stamp, json.dumps(artifacts), tokens_in, tokens_out,
+                critic_verdict, 1 if append_note else 0, critic_notes or "", critic_notes,
+                interventions, json.dumps(intervention_types) if intervention_types else None,
+                attempt_count, task_id
+            ]
+        else:
+            cost_clause = "cost_usd=?"
+            params = [
+                status, stamp, json.dumps(artifacts), cost_usd, tokens_in, tokens_out,
+                critic_verdict, 1 if append_note else 0, critic_notes or "", critic_notes,
+                interventions, json.dumps(intervention_types) if intervention_types else None,
+                attempt_count, task_id
+            ]
         c.execute(
-            "UPDATE tasks SET status=?, finished_at=COALESCE(?, finished_at), artifacts=?, "
-            "cost_usd=COALESCE(?, cost_usd), tokens_in=COALESCE(?, tokens_in), "
-            "tokens_out=COALESCE(?, tokens_out), "
-            "critic_verdict=COALESCE(?, critic_verdict), "
-            "critic_notes=CASE WHEN ?=1 THEN TRIM(COALESCE(critic_notes,'') || ' | ' || ?) "
-            "             ELSE COALESCE(?, critic_notes) END, "
-            "interventions=COALESCE(?, interventions), "
-            "intervention_types=COALESCE(?, intervention_types), "
-            "attempt_count=COALESCE(?, attempt_count) WHERE task_id=?",
-            (status, stamp,
-             json.dumps(artifacts), cost_usd, tokens_in, tokens_out,
-             critic_verdict,
-             1 if append_note else 0, critic_notes or "", critic_notes,
-             interventions,
-             json.dumps(intervention_types) if intervention_types else None,
-             attempt_count, task_id),
+            f"UPDATE tasks SET status=?, finished_at=COALESCE(?, finished_at), artifacts=?, "
+            f"{cost_clause}, tokens_in=COALESCE(?, tokens_in), "
+            f"tokens_out=COALESCE(?, tokens_out), "
+            f"critic_verdict=COALESCE(?, critic_verdict), "
+            f"critic_notes=CASE WHEN ?=1 THEN TRIM(COALESCE(critic_notes,'') || ' | ' || ?) "
+            f"             ELSE COALESCE(?, critic_notes) END, "
+            f"interventions=COALESCE(?, interventions), "
+            f"intervention_types=COALESCE(?, intervention_types), "
+            f"attempt_count=COALESCE(?, attempt_count) WHERE task_id=?",
+            tuple(params),
         )
 
 
@@ -360,8 +342,24 @@ def weekly_fitness(week_start: str | None = None) -> dict:
     # rather than silently discounting them from the accuracy math -- W (§3.2) and
     # this formula are locked, not a place to add a new conditional this session.
     spot_checked_ai = sum(1 for r in spot if is_ai_performed(r["critic_notes"]))   # F54
-    spot_checked_independent = len([r for r in spot if not is_ai_performed(r["critic_notes"])])
-    independent_pass = sum(1 for r in spot if r["human_verdict"] == "pass" and not is_ai_performed(r["critic_notes"]))
+    try:
+        from cost_accounting import is_genuine_operator_review, resolve_task_artifact_sha256
+        valid_independent_reviews = []
+        for r in spot:
+            curr_sha = resolve_task_artifact_sha256(r)
+            if is_genuine_operator_review(
+                r["critic_notes"],
+                task_id=r["task_id"],
+                artifact_sha256=curr_sha,
+                expected_verdict=r["human_verdict"],
+                require_artifact_binding=True,
+            ):
+                valid_independent_reviews.append(r)
+        spot_checked_independent = len(valid_independent_reviews)
+        independent_pass = sum(1 for r in valid_independent_reviews if r["human_verdict"] == "pass")
+    except Exception:
+        spot_checked_independent = 0
+        independent_pass = 0
     independent_accuracy = (round(independent_pass / spot_checked_independent, 3)
                             if spot_checked_independent > 0 else None)
     interventions = sum(r["interventions"] for r in terminal)
@@ -372,9 +370,11 @@ def weekly_fitness(week_start: str | None = None) -> dict:
     has_work_signal = any(r["status"] == "done" or
                           (r["tokens_in"] or 0) + (r["tokens_out"] or 0) > 0
                           for r in terminal)
-    cost_eff = (min(1.0, COST_TARGET / avg_cost) if avg_cost > 0
-                else (1.0 if has_work_signal and len(known_costs) > 0 else 0.0))
-    acc = accuracy if accuracy is not None else 0.0
+    base_cost_eff = (min(1.0, COST_TARGET / avg_cost) if avg_cost > 0
+                     else (1.0 if has_work_signal and len(known_costs) > 0 else 0.0))
+    cost_coverage = (len(known_costs) / n_terminal) if n_terminal > 0 else 0.0
+    cost_eff = round(base_cost_eff * cost_coverage, 3)
+    acc = independent_accuracy if independent_accuracy is not None else 0.0
     fitness = (W["completion"] * completion_rate + W["accuracy"] * acc +
                W["intervention"] * (1 - intervention_norm) + W["cost"] * cost_eff)
     return {

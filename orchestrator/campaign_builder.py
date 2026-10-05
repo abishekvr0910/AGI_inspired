@@ -249,30 +249,43 @@ def build_campaign_from_research(
 
     custom_rsa = RSAAd(headlines=list(default_headlines), descriptions=list(default_descriptions), final_url=landing_url)
     if ad_copies:
+        if verified_for_export:
+            custom_rsa.headlines = []
+            custom_rsa.descriptions = []
         for copy_entry in ad_copies:
             h_list = copy_entry.get("headlines") or []
             d_list = copy_entry.get("descriptions") or []
             if h_list:
-                cleaned_h = [str(h)[:MAX_HEADLINE_LENGTH] for h in h_list[:MAX_RSA_HEADLINES]]
+                cleaned_h = [str(h).strip()[:MAX_HEADLINE_LENGTH] for h in h_list if str(h).strip() and len(str(h).strip()) >= 3]
+                cleaned_h = [h for h in cleaned_h if h.lower() not in ("n/a", "none", "null", "-", "--", "``")]
                 # Filter custom headlines for forbidden claims
                 cleaned_h, _ = filter_forbidden_claims(cleaned_h, [], forbidden_claims)
-                # Supplement with defaults to ensure 15 headlines for Excellent Ad Strength
-                for dh in default_headlines:
-                    if len(cleaned_h) >= MAX_RSA_HEADLINES:
-                        break
-                    if dh not in cleaned_h:
-                        cleaned_h.append(dh)
-                custom_rsa.headlines = cleaned_h
+                if cleaned_h:
+                    if not verified_for_export:
+                        # Supplement with defaults to ensure 15 headlines for Excellent Ad Strength in draft mode only
+                        for dh in default_headlines:
+                            if len(cleaned_h) >= MAX_RSA_HEADLINES:
+                                break
+                            if dh not in cleaned_h:
+                                cleaned_h.append(dh)
+                    custom_rsa.headlines = cleaned_h
+                elif verified_for_export:
+                    custom_rsa.headlines = []
             if d_list:
-                cleaned_d = [str(d)[:MAX_DESCRIPTION_LENGTH] for d in d_list[:MAX_RSA_DESCRIPTIONS]]
+                cleaned_d = [str(d).strip()[:MAX_DESCRIPTION_LENGTH] for d in d_list if str(d).strip() and len(str(d).strip()) >= 5]
+                cleaned_d = [d for d in cleaned_d if d.lower() not in ("n/a", "none", "null", "-", "--", "``")]
                 # Filter custom descriptions for forbidden claims
                 _, cleaned_d = filter_forbidden_claims([], cleaned_d, forbidden_claims)
-                for dd in default_descriptions:
-                    if len(cleaned_d) >= MAX_RSA_DESCRIPTIONS:
-                        break
-                    if dd not in cleaned_d:
-                        cleaned_d.append(dd)
-                custom_rsa.descriptions = cleaned_d
+                if cleaned_d:
+                    if not verified_for_export:
+                        for dd in default_descriptions:
+                            if len(cleaned_d) >= MAX_RSA_DESCRIPTIONS:
+                                break
+                            if dd not in cleaned_d:
+                                cleaned_d.append(dd)
+                    custom_rsa.descriptions = cleaned_d
+                elif verified_for_export:
+                    custom_rsa.descriptions = []
             url = copy_entry.get("landing_url") or copy_entry.get("final_url")
             if url and str(url).startswith("http"):
                 custom_rsa.final_url = str(url)
@@ -284,13 +297,19 @@ def build_campaign_from_research(
 
         for item in kw_items:
             kw_text = str(item.get("keyword") or "").strip()
+            if not kw_text or len(kw_text) < 2 or kw_text.lower() in ("n/a", "none", "null", "-", "--", "``"):
+                continue
             # Add Exact Match
             ag.keywords.append(KeywordTarget(text=kw_text, match_type="Exact"))
             # Add Phrase Match
             ag.keywords.append(KeywordTarget(text=kw_text, match_type="Phrase"))
 
-        # Attach RSA ad copy
-        ag.ads.append(custom_rsa)
+        if not ag.keywords:
+            continue
+
+        # Attach RSA ad copy only if valid non-empty headlines and descriptions exist
+        if custom_rsa.headlines and custom_rsa.descriptions:
+            ag.ads.append(custom_rsa)
         campaign.ad_groups.append(ag)
 
     return campaign

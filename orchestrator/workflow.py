@@ -239,10 +239,52 @@ def run_synthesis(tid: int, row: dict, mission: dict, roles: dict, out_dir: Path
     # this path is retried like any other.
     tok_in = int(mission_usage.get("input_tokens") or 0) + int(row.get("tokens_in") or 0)
     tok_out = int(mission_usage.get("output_tokens") or 0) + int(row.get("tokens_out") or 0)
-    ledger.finish_task(tid, artifacts=[str(dest.relative_to(rc.ROOT))], cost_usd=0.0,
+    syn_cost = None
+    task_cost = None
+    try:
+        from cost_accounting import calculate_task_cost, combine_task_costs
+        syn_model = worker_cfg.get("model") if isinstance(worker_cfg, dict) else None
+        syn_provider = worker_cfg.get("provider") if isinstance(worker_cfg, dict) else None
+        if syn_provider and syn_model and "/" not in syn_model:
+            syn_model = f"{syn_provider}/{syn_model}"
+        w_in = int(syn_usage.get("input_tokens") or syn_usage.get("tokens_in") or mission_usage.get("worker_in") or (tok_in * 0.7))
+        w_out = int(syn_usage.get("output_tokens") or syn_usage.get("tokens_out") or mission_usage.get("worker_out") or (tok_out * 0.7))
+        c_in = int(critic_usage.get("input_tokens") or critic_usage.get("tokens_in") or mission_usage.get("critic_in") or (tok_in * 0.3))
+        c_out = int(critic_usage.get("output_tokens") or critic_usage.get("tokens_out") or mission_usage.get("critic_out") or (tok_out * 0.3))
+        critic_cfg = roles.get("critic", {})
+        c_p = critic_cfg.get("provider", "ollama") if isinstance(critic_cfg, dict) else "ollama"
+        c_m = critic_cfg.get("model", "glm-5.2:cloud") if isinstance(critic_cfg, dict) else "glm-5.2:cloud"
+        critic_model = f"{c_p}/{c_m}" if "/" not in c_m else c_m
+        w_cost = calculate_task_cost(
+            syn_model, w_in, w_out,
+            raw_cost_usd=syn_usage.get("cost_usd"),
+            is_invoice=bool(syn_usage.get("is_invoice")),
+        )
+        c_cost = calculate_task_cost(
+            critic_model, c_in, c_out,
+            raw_cost_usd=critic_usage.get("cost_usd"),
+            is_invoice=bool(critic_usage.get("is_invoice")),
+        )
+        task_cost = combine_task_costs([w_cost, c_cost])
+        syn_cost = task_cost.cost_usd
+
+        # Persist structured cost artifact for reproducibility & audit (RR4)
+        cost_file = rc.RUNS / f"task{tid}_a{attempt}_cost.json"
+        try:
+            cost_file.write_text(json.dumps(task_cost.to_dict(), indent=2) + "\n", encoding="utf-8")
+        except Exception:
+            pass
+    except Exception:
+        syn_cost = None
+
+    annotated_notes = (verdict_text[:450] if verdict_text else "")
+    if task_cost is not None:
+        annotated_notes += f"\n[COST_BASIS: {task_cost.basis.value}]"
+
+    ledger.finish_task(tid, artifacts=[str(dest.relative_to(rc.ROOT))], cost_usd=syn_cost,
                        tokens_in=tok_in, tokens_out=tok_out,
                        critic_verdict=("needs_review" if verdict == "infra_failed" else verdict),
-                       critic_notes=verdict_text[:500], status=status,
+                       critic_notes=annotated_notes, status=status,
                        attempt_count=attempt)
     if verdict == "fail":
         ledger.add_lesson(tid, f"[{mission['id']}] {verdict_text[:300]}", kind="failed")

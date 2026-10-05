@@ -111,8 +111,22 @@ def find_sample_artifacts(workspace_dir: Path) -> list[dict[str, Any]]:
 
 
 def create_backup(workspace_dir: Path, backup_dir: Path, artifacts: list[dict[str, Any]]) -> dict[str, Any]:
-    """Copy all target artifacts into backup_dir preserving structure and recording checksums."""
+    """Copy all target artifacts into backup_dir preserving structure and recording checksums.
+    
+    Baseline Preservation (R8): If an artifact already exists in backup_dir, the existing
+    baseline is preserved and never overwritten by subsequent passes.
+    """
     backup_dir.mkdir(parents=True, exist_ok=True)
+    manifest_file = backup_dir / "manifest.json"
+    existing_files: dict[str, dict[str, Any]] = {}
+    if manifest_file.is_file():
+        try:
+            with open(manifest_file, "r", encoding="utf-8") as f:
+                old_m = json.load(f)
+                existing_files = {e["rel_path"]: e for e in old_m.get("files", [])}
+        except Exception:
+            existing_files = {}
+
     manifest: dict[str, Any] = {
         "created_at": "2026-10-04T14:00:00Z",
         "workspace_root": str(workspace_dir.resolve()),
@@ -129,6 +143,12 @@ def create_backup(workspace_dir: Path, backup_dir: Path, artifacts: list[dict[st
         else:
             rel_in_ws = Path(rel)
         dest = backup_dir / rel_in_ws
+
+        # If already present in backup baseline, preserve original baseline!
+        if dest.is_file() and rel in existing_files:
+            manifest["files"].append(existing_files[rel])
+            continue
+
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
         checksum = sha256_file(dest)
@@ -139,7 +159,6 @@ def create_backup(workspace_dir: Path, backup_dir: Path, artifacts: list[dict[st
             "client_id": art["client_id"],
         })
 
-    manifest_file = backup_dir / "manifest.json"
     with open(manifest_file, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
 
@@ -155,6 +174,9 @@ def restore_backup(workspace_dir: Path, backup_dir: Path) -> int:
     with open(manifest_file, "r", encoding="utf-8") as f:
         manifest = json.load(f)
 
+    ws_resolved = workspace_dir.resolve()
+    backup_resolved = backup_dir.resolve()
+
     restored_count = 0
     for entry in manifest["files"]:
         rel = entry["rel_path"]
@@ -162,8 +184,15 @@ def restore_backup(workspace_dir: Path, backup_dir: Path) -> int:
             rel_in_ws = Path(rel[len("workspace/"):])
         else:
             rel_in_ws = Path(rel)
-        backup_src = backup_dir / rel_in_ws
-        target_dest = workspace_dir / rel_in_ws
+
+        backup_src = (backup_dir / rel_in_ws).resolve()
+        target_dest = (workspace_dir / rel_in_ws).resolve()
+
+        # Path traversal guard (R8): verify resolved target is strictly contained inside workspace_dir
+        if not target_dest.is_relative_to(ws_resolved):
+            raise ValueError(f"Path traversal detected in backup manifest target: {rel}")
+        if not backup_src.is_relative_to(backup_resolved):
+            raise ValueError(f"Path traversal detected in backup manifest source: {rel}")
 
         if not backup_src.is_file():
             raise FileNotFoundError(f"Missing backup file: {backup_src}")

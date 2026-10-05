@@ -78,6 +78,11 @@ def dispatch_distribution_task(
     root: Path | str | None = None,
     runs_dir: Path | str | None = None,
     db_path: Path | str | None = None,
+    max_budget_usd: float | None = None,
+    max_tokens: int | None = None,
+    budget_enforcement: str = "admission_parameters_only",
+    frozen_spec: dict[str, Any] | None = None,
+    **extra_claims: Any,
 ) -> dict[str, Any]:
     """Compile and admit a distribution research task.
 
@@ -91,6 +96,12 @@ def dispatch_distribution_task(
     template_info = TEMPLATES[template_name]
     spec, criteria = template_info["func"](profile, seed_input=seed_input)
 
+    if frozen_spec:
+        desc = frozen_spec.get("description", "")
+        proh = frozen_spec.get("prohibited_archetypes", [])
+        charlim = frozen_spec.get("character_limits", {})
+        spec += f"\n\n[FROZEN PILOT CONSTRAINTS]\nDescription: {desc}\nProhibited Archetypes: {proh}\nCharacter Limits: {charlim}"
+
     if dry_run:
         return {
             "client_id": client_id,
@@ -100,6 +111,10 @@ def dispatch_distribution_task(
             "dry_run": True,
             "spec": spec,
             "pass_criteria": criteria,
+            "max_budget_usd": max_budget_usd,
+            "max_tokens": max_tokens,
+            "budget_enforcement": budget_enforcement,
+            "frozen_spec": frozen_spec,
         }
 
     if root is not None:
@@ -127,6 +142,11 @@ def dispatch_distribution_task(
         pass_criteria=criteria,
         client_id=client_id,
         worker_engine=worker_engine,
+        max_budget_usd=max_budget_usd,
+        max_tokens=max_tokens,
+        budget_enforcement=budget_enforcement,
+        frozen_task_spec=frozen_spec,
+        **extra_claims,
     )
 
     return {
@@ -140,6 +160,9 @@ def dispatch_distribution_task(
         "status": "queued",
         "spec": spec,
         "pass_criteria": criteria,
+        "max_budget_usd": max_budget_usd,
+        "max_tokens": max_tokens,
+        "budget_enforcement": budget_enforcement,
     }
 
 
@@ -168,6 +191,138 @@ def dispatch_all_templates(
         )
         results.append(res)
     return results
+
+
+def validate_and_dispatch_pilot(
+    pilot_arg: str,
+    client_id: str | None = None,
+    dry_run: bool = True,
+    worker_engine: str = "native",
+    root: Path | str | None = None,
+    runs_dir: Path | str | None = None,
+    db_path: Path | str | None = None,
+) -> dict[str, Any]:
+    """Validate pilot specification bounds and dispatch strictly held-out tasks (R10)."""
+    p_path = Path(pilot_arg)
+    if not p_path.is_file():
+        root_path = Path(root) if root else ROOT
+        cand = root_path / "workspace" / "pilots" / f"{pilot_arg}.json"
+        if cand.is_file():
+            p_path = cand
+        elif (root_path / "workspace" / "pilots" / pilot_arg).is_file():
+            p_path = root_path / "workspace" / "pilots" / pilot_arg
+        else:
+            # Search by pilot_id inside pilot specs
+            pilots_dir = root_path / "workspace" / "pilots"
+            matched = None
+            if pilots_dir.is_dir():
+                for pf in pilots_dir.glob("*.json"):
+                    try:
+                        pjson = json.loads(pf.read_text(encoding="utf-8"))
+                        if pjson.get("pilot_id") == pilot_arg:
+                            matched = pf
+                            break
+                    except Exception:
+                        pass
+            if matched:
+                p_path = matched
+            else:
+                raise FileNotFoundError(f"Pilot specification file not found: {pilot_arg}")
+
+    with open(p_path, "r", encoding="utf-8") as f:
+        pilot_data = json.load(f)
+
+    pilot_id = pilot_data.get("pilot_id")
+    spec_client_id = pilot_data.get("client_id")
+    if client_id and spec_client_id and client_id != spec_client_id:
+        raise ValueError(f"Pilot specification client '{spec_client_id}' does not match requested client '{client_id}'")
+
+    target_client = client_id or spec_client_id
+    raw_live = pilot_data.get("live_execution_authorized", False)
+    if isinstance(raw_live, str):
+        if raw_live.strip().lower() in ("false", "0", "no", "off"):
+            live_authorized = False
+        elif raw_live.strip().lower() in ("true", "1", "yes", "on"):
+            live_authorized = True
+        else:
+            raise ValueError(f"Invalid boolean string for live_execution_authorized: {raw_live!r}")
+    elif isinstance(raw_live, bool):
+        live_authorized = raw_live
+    else:
+        raise ValueError(f"Invalid type for live_execution_authorized: {type(raw_live)}")
+
+    if not dry_run and not live_authorized:
+        raise RuntimeError(
+            f"PILOT_ADMISSION_BLOCKED: Pilot '{pilot_id}' has live_execution_authorized=False. "
+            "Execution is restricted to model-free dry-run only until an operator window is authorized."
+        )
+
+    bounds = pilot_data.get("budget_and_resource_bounds")
+    if not isinstance(bounds, dict):
+        raise ValueError(f"Pilot '{pilot_id}' budget_and_resource_bounds must be a dictionary")
+
+    max_tokens = bounds.get("max_total_tokens")
+    max_cost = bounds.get("max_cost_usd")
+
+    if max_tokens is None or not isinstance(max_tokens, (int, float)) or max_tokens <= 0:
+        raise ValueError(f"PILOT_ADMISSION_BLOCKED: max_total_tokens bound must be > 0 (got {max_tokens})")
+    if max_cost is None or not isinstance(max_cost, (int, float)) or max_cost <= 0:
+        raise ValueError(f"PILOT_ADMISSION_BLOCKED: max_cost_usd bound must be > 0 (got {max_cost})")
+
+    held_out_manifest = pilot_data.get("held_out_task_manifest", [])
+    if not held_out_manifest:
+        raise ValueError(f"Pilot '{pilot_id}' defines no held_out_task_manifest")
+
+    templates_to_run = [t["template"] for t in held_out_manifest]
+    for t_name in templates_to_run:
+        if t_name not in TEMPLATES:
+            raise ValueError(f"Pilot held-out template '{t_name}' is not a recognized research template")
+
+    estimated_tokens = len(templates_to_run) * 15_000
+    if estimated_tokens > max_tokens:
+        raise RuntimeError(
+            f"PILOT_ADMISSION_BLOCKED: Manifest estimated token demand ({estimated_tokens}) exceeds pilot max_total_tokens ({max_tokens})"
+        )
+
+    per_task_tokens = max(1, int(max_tokens) // len(held_out_manifest))
+    per_task_budget = round(float(max_cost) / len(held_out_manifest), 6)
+
+    dispatched = []
+    for t_entry in held_out_manifest:
+        t_name = t_entry["template"]
+        res = dispatch_distribution_task(
+            target_client,
+            t_name,
+            dry_run=dry_run,
+            worker_engine=worker_engine,
+            root=root,
+            runs_dir=runs_dir,
+            db_path=db_path,
+            max_budget_usd=per_task_budget,
+            max_tokens=per_task_tokens,
+            budget_enforcement="hard_stop",
+            frozen_spec=t_entry,
+            shared_budget_id=pilot_id,
+            shared_max_budget_usd=float(max_cost),
+            shared_max_tokens=int(max_tokens),
+        )
+        res["held_out"] = t_entry.get("held_out", True)
+        res["pilot_id"] = pilot_id
+        res["allocated_budget_usd"] = per_task_budget
+        res["allocated_tokens"] = per_task_tokens
+        dispatched.append(res)
+
+    return {
+        "success": True,
+        "pilot_id": pilot_id,
+        "client_id": target_client,
+        "status": "dry_run_preview" if dry_run else "admitted",
+        "live_execution_authorized": live_authorized,
+        "budget_bounds": bounds,
+        "tasks_dispatched": len(dispatched),
+        "held_out_templates": templates_to_run,
+        "results": dispatched,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -212,12 +367,49 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Run full end-to-end client venture pipeline: dispatch all research templates, build STAG campaign, export Google Ads Editor CSV, and generate strategy dossier",
     )
+    parser.add_argument(
+        "--pilot",
+        help="Path or identifier of consented pilot spec JSON to enforce bounds and dispatch held-out manifest (R10)",
+    )
     parser.add_argument("--root", help=argparse.SUPPRESS)
     parser.add_argument("--runs-dir", help=argparse.SUPPRESS)
     parser.add_argument("--db-path", help=argparse.SUPPRESS)
     parser.add_argument("--json", action="store_true", help="Output response in machine-readable JSON format")
 
     args = parser.parse_args(argv)
+
+    if args.pilot:
+        try:
+            pilot_res = validate_and_dispatch_pilot(
+                args.pilot,
+                client_id=args.client,
+                dry_run=args.dry_run,
+                worker_engine=args.worker_engine,
+                root=args.root,
+                runs_dir=args.runs_dir,
+                db_path=args.db_path,
+            )
+            if args.json:
+                print(json.dumps(pilot_res, indent=2))
+            else:
+                mode_str = "[PILOT DRY-RUN PREVIEW]" if args.dry_run else "[PILOT ADMITTED]"
+                print(f"\n{mode_str} Pilot: {pilot_res['pilot_id']} | Client: {pilot_res['client_id']}")
+                print("=" * 65)
+                print(f"  * Budget Cap:           ${pilot_res['budget_bounds'].get('max_cost_usd', 0):.2f} USD")
+                print(f"  * Token Cap:            {pilot_res['budget_bounds'].get('max_total_tokens', 0):,} tokens")
+                print(f"  * Live Authorized:      {pilot_res['live_execution_authorized']}")
+                print(f"  * Held-Out Tasks ({len(pilot_res['results'])}):")
+                for r in pilot_res["results"]:
+                    tid_str = f"task_id={r.get('task_id')}" if not args.dry_run else "dry-run"
+                    print(f"    • {r['template']:<24} [{r['surface']}] -> {tid_str}")
+                print("=" * 65 + "\n")
+            return 0
+        except Exception as exc:
+            if args.json:
+                print(json.dumps({"error": str(exc), "client_id": args.client}, indent=2), file=sys.stderr)
+            else:
+                print(f"\n[PILOT ADMISSION BLOCKED] {exc}\n", file=sys.stderr)
+            return 1
 
     if args.list_templates:
         summary = {k: {"description": v["description"], "surface": v["surface"]} for k, v in TEMPLATES.items()}

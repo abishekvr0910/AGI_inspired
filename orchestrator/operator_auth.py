@@ -94,7 +94,9 @@ def _credential_write(target: str, value: str) -> bool:
              "Persist": _win32cred.CRED_PERSIST_LOCAL_MACHINE,
              "UserName": "operator"}, 0)
         return True
-    except Exception:
+    except Exception as exc:
+        if "BLOCKED" in str(exc):
+            raise
         return False
 
 
@@ -125,6 +127,11 @@ def _generate_keypair() -> tuple[bytes, bytes]:
 
 def _store_keypair(private_bytes: bytes, public_bytes: bytes) -> None:
     """Store keypair in Credential Manager as a JSON blob."""
+    if os.environ.get("AGI_TEST_TIER") and not os.environ.get("HERMES_HOME"):
+        raise RuntimeError(
+            f"OPERATOR KEY PROVISIONING BLOCKED in {os.environ.get('AGI_TEST_TIER')} test tier: "
+            "credential provisioning is forbidden in model-free tests"
+        )
     blob = json.dumps({
         "private_key": base64.b64encode(private_bytes).decode("ascii"),
         "public_key": base64.b64encode(public_bytes).decode("ascii"),
@@ -332,3 +339,22 @@ def key_status() -> dict:
                 "fingerprint": None, "storage": None}
     except Exception as exc:
         return {"present": False, "error": str(exc)}
+
+
+def create_operator_review(
+    task_id: int,
+    artifact_sha256: str,
+    verdict: str = "pass",
+    notes: str = "",
+) -> str:
+    """Create a cryptographically signed operator review token bound to task and artifact digest (RR5)."""
+    from datetime import datetime, timezone
+    payload = {
+        "event": "operator_review",
+        "task_id": int(task_id),
+        "artifact_sha256": str(artifact_sha256).strip(),
+        "verdict": str(verdict).strip().lower(),
+        "notes": str(notes).strip(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    return sign_marker(payload)

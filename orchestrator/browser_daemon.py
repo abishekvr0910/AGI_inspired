@@ -134,7 +134,7 @@ class BrowserDaemon:
         ]
         if self.proxy_server:
             cmd.append(f"--proxy-server={self.proxy_server}")
-            cmd.append("--proxy-bypass-list=127.0.0.1;localhost")
+            cmd.append("--proxy-bypass-list=<-loopback>")
 
         logger.info("Starting browser daemon: %s on port %d", self.executable_path, self.port)
         popen_extra = {}

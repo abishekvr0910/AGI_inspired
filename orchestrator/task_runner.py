@@ -441,6 +441,12 @@ def _run_research_task(context: _TaskContext) -> str:
     control_paths = (notebook_path, chain.chain_path(rc.RUNS, tid))
     client_id = row.get("client_id")
     worker_engine = None
+    max_budget_usd = None
+    max_tokens = None
+    budget_enforcement = None
+    shared_budget_id = None
+    shared_max_budget_usd = None
+    shared_max_tokens = None
     if chained:
         try:
             for payload in chain.read_payloads(rc.RUNS, tid):
@@ -449,9 +455,27 @@ def _run_research_task(context: _TaskContext) -> str:
                     if client_id is None:
                         client_id = claims.get("client_id")
                     worker_engine = claims.get("worker_engine")
+                    max_budget_usd = claims.get("max_budget_usd")
+                    max_tokens = claims.get("max_tokens")
+                    budget_enforcement = claims.get("budget_enforcement")
+                    shared_budget_id = claims.get("shared_budget_id") or claims.get("pilot_id")
+                    shared_max_budget_usd = claims.get("shared_max_budget_usd")
+                    shared_max_tokens = claims.get("shared_max_tokens")
                     break
         except Exception:
             pass
+
+    from budget_controller import BudgetController, BudgetExhaustedError, UnboundedPricingError
+    budget_ctrl = BudgetController(
+        runs_dir=rc.RUNS,
+        task_id=tid,
+        max_budget_usd=max_budget_usd,
+        max_tokens=max_tokens,
+        budget_enforcement=budget_enforcement,
+        shared_budget_id=shared_budget_id,
+        shared_max_budget_usd=shared_max_budget_usd,
+        shared_max_tokens=shared_max_tokens,
+    )
 
     if worker_engine:
         worker_cfg = dict(worker_cfg)
@@ -482,6 +506,21 @@ def _run_research_task(context: _TaskContext) -> str:
         except Exception:
             pass
 
+    worker_model_str = f"{worker_cfg.get('provider')}/{worker_cfg.get('model')}"
+    worker_res_id = None
+    try:
+        worker_res_id = budget_ctrl.reserve("worker", worker_model_str, prompt_text=prompt)
+    except (BudgetExhaustedError, UnboundedPricingError) as exc:
+        ledger.finish_task(
+            tid, artifacts=[], status="quota_wait",
+            critic_notes=f"hard_stop budget check blocked execution: {exc}",
+            append_note=True, attempt_count=attempt
+        )
+        rc.log(f"task {tid}: budget_blocked ({exc})")
+        if tw:
+            tw.task_failed(f"budget blocked: {exc}", failure_stage="admission")
+        return "budget_skip"
+
     # F106 §2 (audit 2026-09-05): fs_integrity_check MUST run even when the
     # worker call aborts (timeout / DB-containment violation / launch failure).
     # Previously it sat AFTER the try/except on the success path only, so a
@@ -489,6 +528,8 @@ def _run_research_task(context: _TaskContext) -> str:
     # containment check entirely. The check is non-raising on violation (it
     # logs, preserves evidence, and auto-reverts via git checkout), so an
     # unconditional finally cannot mask the infra_failed returns above.
+    out = ""
+    is_timeout = False
     try:
         try:
             with protect_metadata(*control_paths), integrity.DatabaseMutationGuard(f"task {tid} worker call"), _workspace_confinement_guard(tid, f"task {tid} worker call", client_id=client_id):
@@ -497,14 +538,25 @@ def _run_research_task(context: _TaskContext) -> str:
                     worker_options["retrieval_profile"] = context.retrieval_profile
                 # Pass mission_id for skill loading
                 worker_options["mission_id"] = mission["id"]
+                worker_options["budget_ctrl"] = budget_ctrl
+                worker_options["res_id"] = worker_res_id
                 out, usage, model_used_cfg, exhausted = execution.worker_with_failover(
                     prompt, worker_cfg, usage_path, log_prefix=f"task {tid}",
                     **worker_options)
+            base_worker_usage = dict(usage)
             if chained:
                 chain.append_step(rc.RUNS, chain.Step.WORKER, tid, attempt,
                     {"model": {k: model_used_cfg.get(k) for k in ("provider", "model")}, "input_tokens": usage.get("input_tokens", 0),
                      "output_tokens": usage.get("output_tokens", 0), "exhausted": exhausted,
                      "repair_number": 0, "output_sha256": chain.text_digest(out)})
+            if worker_res_id:
+                w_tin = int(usage.get("input_tokens") or usage.get("tokens_in") or 0)
+                w_tout = int(usage.get("output_tokens") or usage.get("tokens_out") or 0)
+                w_model = f"{model_used_cfg.get('provider')}/{model_used_cfg.get('model')}"
+                import cost_accounting
+                w_cost = cost_accounting.calculate_task_cost(w_model, w_tin, w_tout, raw_cost_usd=usage.get("cost_usd"))
+                budget_ctrl.reconcile(worker_res_id, actual_cost_usd=w_cost.cost_usd, actual_tokens=(w_tin + w_tout))
+                worker_res_id = None
             usage["policy_digest"] = policy_snapshot.get("policy_digest")
             usage["allowlisted_hosts"] = policy_snapshot.get("allowlisted_hosts", [])
             if usage_path.is_file():
@@ -531,7 +583,19 @@ def _run_research_task(context: _TaskContext) -> str:
                     except Exception:
                         import time
                         time.sleep(0.05)
+        except BudgetExhaustedError as exc:
+            usage["policy_digest"] = policy_snapshot.get("policy_digest")
+            usage["allowlisted_hosts"] = policy_snapshot.get("allowlisted_hosts", [])
+            write_worker_raw(rc.RUNS, tid, "", {"process_error": f"budget_exhausted: {exc}", **policy_snapshot}, "worker", attempt=attempt)
+            ledger.finish_task(tid, artifacts=[], status="quota_wait",
+                               critic_notes=f"hard_stop budget check blocked execution: {exc}",
+                               append_note=True, attempt_count=attempt)
+            rc.log(f"task {tid}: quota_wait (budget_exhausted: {exc})")
+            if tw:
+                tw.task_failed(f"budget exhausted: {exc}", failure_stage="execution")
+            return "budget_skip"
         except subprocess.TimeoutExpired:
+            is_timeout = True
             usage["policy_digest"] = policy_snapshot.get("policy_digest")
             usage["allowlisted_hosts"] = policy_snapshot.get("allowlisted_hosts", [])
             write_worker_raw(rc.RUNS, tid, "", {"process_error": "worker timeout", **policy_snapshot}, "worker", attempt=attempt)
@@ -568,6 +632,9 @@ def _run_research_task(context: _TaskContext) -> str:
                                detail=str(exc)[:200])
             return "infra_failed"
     finally:
+        if worker_res_id:
+            budget_ctrl.release_reservation(worker_res_id, timeout=is_timeout)
+            worker_res_id = None
         integrity.fs_integrity_check(fs_snapshot, context=f"task {tid} worker call")
     # Persist the FULL raw output regardless of what happens next -- a misclassified
     # task must stay diagnosable. Learned 2026-07-18: a real, substantial brief was
@@ -636,9 +703,11 @@ def _run_research_task(context: _TaskContext) -> str:
     # Trap 2: Never fire repair loop on infra failures, chain exhaustion, or error outputs.
     if exhausted or execution.worker_failed(out, usage) or deliverable_preflight.is_infra_error(out):
         return _record_outcome(context, out, usage, worker_cfg, scope_note,
-                               out_dir, wk, baseline, attempt=attempt)
+                               out_dir, wk, baseline, attempt=attempt,
+                               budget_ctrl=budget_ctrl)
 
     repair_attempt = 0
+    repair_costs: list[Any] = []
     while True:
         preflight_report = deliverable_preflight.run_preflight(
             out,
@@ -682,43 +751,75 @@ def _run_research_task(context: _TaskContext) -> str:
         repair_worker_options = dict(worker_options)
         if needs_research:
             repair_worker_options["enforce_active_research"] = True
+
+        repair_model_str = f"{worker_cfg.get('provider')}/{worker_cfg.get('model')}"
+        repair_res_id = None
         try:
-            with protect_metadata(*control_paths), integrity.DatabaseMutationGuard(f"task {tid} worker repair {repair_attempt}"), _workspace_confinement_guard(tid, f"task {tid} worker repair {repair_attempt}", client_id=client_id):
-                r_out, r_usage, r_model_cfg, r_exhausted = execution.worker_with_failover(
-                    repair_prompt, worker_cfg, repair_usage_path, log_prefix=f"task {tid} repair {repair_attempt}",
-                    **repair_worker_options)
-            if chained:
-                chain.append_step(rc.RUNS, chain.Step.WORKER, tid, attempt,
-                    {"model": {k: r_model_cfg.get(k) for k in ("provider", "model")}, "input_tokens": r_usage.get("input_tokens", 0),
-                     "output_tokens": r_usage.get("output_tokens", 0), "exhausted": r_exhausted,
-                     "repair_number": repair_attempt, "output_sha256": chain.text_digest(r_out)})
-            if repair_usage_path.is_file():
-                for _retry in range(5):
-                    try:
-                        curr_r_usage = json.loads(repair_usage_path.read_text(encoding="utf-8"))
-                        curr_r_usage["policy_digest"] = policy_snapshot.get("policy_digest")
-                        curr_r_usage["allowlisted_hosts"] = policy_snapshot.get("allowlisted_hosts", [])
-                        repair_usage_path.write_text(json.dumps(curr_r_usage, indent=2) + "\n", encoding="utf-8")
-                        break
-                    except Exception:
-                        import time
-                        time.sleep(0.05)
-            if attempt == 1 and repair_usage_path.is_file():
-                for _retry in range(5):
-                    try:
-                        (rc.RUNS / f"task{tid}_worker_repair_{repair_attempt}.usage.json").write_bytes(
-                            repair_usage_path.read_bytes())
-                        break
-                    except Exception:
-                        import time
-                        time.sleep(0.05)
-        except (MetadataMutation, chain.ChainError, *_workspace_confinement_violation_types()) as exc:
-            ledger.finish_task(tid, artifacts=[], status="infra_failed", critic_notes=str(exc),
-                               attempt_count=attempt)
-            return "infra_failed"
-        except Exception as exc:
-            rc.log(f"task {tid}: repair attempt {repair_attempt} failed with exception: {exc}")
+            repair_res_id = budget_ctrl.reserve("repair", repair_model_str, prompt_text=repair_prompt)
+        except (BudgetExhaustedError, UnboundedPricingError) as exc:
+            rc.log(f"task {tid}: preflight repair {repair_attempt} skipped (budget limit reached: {exc})")
             break
+
+        r_is_timeout = False
+        try:
+            try:
+                with protect_metadata(*control_paths), integrity.DatabaseMutationGuard(f"task {tid} worker repair {repair_attempt}"), _workspace_confinement_guard(tid, f"task {tid} worker repair {repair_attempt}", client_id=client_id):
+                    r_out, r_usage, r_model_cfg, r_exhausted = execution.worker_with_failover(
+                        repair_prompt, worker_cfg, repair_usage_path, log_prefix=f"task {tid} repair {repair_attempt}",
+                        **repair_worker_options)
+                if chained:
+                    chain.append_step(rc.RUNS, chain.Step.WORKER, tid, attempt,
+                        {"model": {k: r_model_cfg.get(k) for k in ("provider", "model")}, "input_tokens": r_usage.get("input_tokens", 0),
+                         "output_tokens": r_usage.get("output_tokens", 0), "exhausted": r_exhausted,
+                         "repair_number": repair_attempt, "output_sha256": chain.text_digest(r_out)})
+                if repair_res_id:
+                    r_tin = int(r_usage.get("input_tokens") or r_usage.get("tokens_in") or 0)
+                    r_tout = int(r_usage.get("output_tokens") or r_usage.get("tokens_out") or 0)
+                    r_model = f"{r_model_cfg.get('provider')}/{r_model_cfg.get('model')}"
+                    import cost_accounting
+                    r_cost = cost_accounting.calculate_task_cost(
+                        r_model, r_tin, r_tout,
+                        raw_cost_usd=r_usage.get("cost_usd"),
+                        is_invoice=bool(r_usage.get("is_invoice")),
+                    )
+                    repair_costs.append(r_cost)
+                    budget_ctrl.reconcile(repair_res_id, actual_cost_usd=r_cost.cost_usd, actual_tokens=(r_tin + r_tout))
+                    repair_res_id = None
+                if repair_usage_path.is_file():
+                    for _retry in range(5):
+                        try:
+                            curr_r_usage = json.loads(repair_usage_path.read_text(encoding="utf-8"))
+                            curr_r_usage["policy_digest"] = policy_snapshot.get("policy_digest")
+                            curr_r_usage["allowlisted_hosts"] = policy_snapshot.get("allowlisted_hosts", [])
+                            repair_usage_path.write_text(json.dumps(curr_r_usage, indent=2) + "\n", encoding="utf-8")
+                            break
+                        except Exception:
+                            import time
+                            time.sleep(0.05)
+                if attempt == 1 and repair_usage_path.is_file():
+                    for _retry in range(5):
+                        try:
+                            (rc.RUNS / f"task{tid}_worker_repair_{repair_attempt}.usage.json").write_bytes(
+                                repair_usage_path.read_bytes())
+                            break
+                        except Exception:
+                            import time
+                            time.sleep(0.05)
+            except subprocess.TimeoutExpired:
+                r_is_timeout = True
+                rc.log(f"task {tid}: repair attempt {repair_attempt} timed out")
+                break
+            except (MetadataMutation, chain.ChainError, *_workspace_confinement_violation_types()) as exc:
+                ledger.finish_task(tid, artifacts=[], status="infra_failed", critic_notes=str(exc),
+                                   attempt_count=attempt)
+                return "infra_failed"
+            except Exception as exc:
+                rc.log(f"task {tid}: repair attempt {repair_attempt} failed with exception: {exc}")
+                break
+        finally:
+            if repair_res_id:
+                budget_ctrl.release_reservation(repair_res_id, timeout=r_is_timeout)
+                repair_res_id = None
         if r_usage:
             r_in = int(r_usage.get("input_tokens") or r_usage.get("tokens_in") or 0)
             r_out_tok = int(r_usage.get("output_tokens") or r_usage.get("tokens_out") or 0)
@@ -745,12 +846,16 @@ def _run_research_task(context: _TaskContext) -> str:
             write_worker_raw(rc.RUNS, tid, out, usage, "worker", attempt=attempt)
 
     return _record_outcome(context, out, usage, worker_cfg, scope_note,
-                           out_dir, wk, baseline, attempt=attempt)
+                           out_dir, wk, baseline, attempt=attempt,
+                           budget_ctrl=budget_ctrl, repair_costs=repair_costs,
+                           worker_usage=base_worker_usage)
 
 
 def _record_outcome(context: _TaskContext, out: str, usage: dict,
                     worker_cfg: dict, scope_note: str, out_dir, wk: str,
-                    baseline: bool, attempt: int = 1) -> str:
+                    baseline: bool, attempt: int = 1,
+                    budget_ctrl=None, repair_costs=None,
+                    worker_usage=None) -> str:
     """Persist, grade, account for, and learn from a completed worker output."""
     tid, mission, roles, row = (context.tid, context.mission,
                                 context.roles, context.row)
@@ -760,15 +865,54 @@ def _record_outcome(context: _TaskContext, out: str, usage: dict,
     dest.write_text(out + f"\n\n---\n_task {tid} · {datetime.now().isoformat(timespec='seconds')}"
                           f" · {worker_cfg['model']}_\n", encoding="utf-8")
 
+    if budget_ctrl is None:
+        from budget_controller import BudgetController
+        budget_ctrl = BudgetController(runs_dir=rc.RUNS, task_id=tid)
+
+    critic_cfg = roles.get("critic", {})
+    c_provider = critic_cfg.get("provider", "ollama")
+    c_model = critic_cfg.get("model", "llama3.2:latest")
+    critic_model_str = f"{c_provider}/{c_model}" if "/" not in c_model else c_model
+
+    from budget_controller import BudgetExhaustedError, UnboundedPricingError
+    critic_res_id = None
+    try:
+        critic_res_id = budget_ctrl.reserve("critic", critic_model_str, prompt_text=out)
+    except (BudgetExhaustedError, UnboundedPricingError) as exc:
+        rc.log(f"task {tid}: critic budget check blocked execution: {exc}")
+        ledger.finish_task(
+            tid, artifacts=[], status="quota_wait",
+            critic_notes=f"critic budget reservation failed: {exc}",
+            append_note=True, attempt_count=attempt
+        )
+        return "quota_wait"
+
     critic_usage: dict = {}
     try:
-        verdict, verdict_text = evaluation.run_critic(
-            row, out, roles, baseline, scope_note=scope_note, usage_out=critic_usage,
-            worker_config=worker_cfg, attempt=attempt)
-    except TypeError:
-        verdict, verdict_text = evaluation.run_critic(
-            row, out, roles, baseline, scope_note=scope_note, usage_out=critic_usage,
-            worker_config=worker_cfg)
+        try:
+            verdict, verdict_text = evaluation.run_critic(
+                row, out, roles, baseline, scope_note=scope_note, usage_out=critic_usage,
+                worker_config=worker_cfg, attempt=attempt)
+        except TypeError:
+            verdict, verdict_text = evaluation.run_critic(
+                row, out, roles, baseline, scope_note=scope_note, usage_out=critic_usage,
+                worker_config=worker_cfg)
+        if critic_res_id:
+            c_tin = int(critic_usage.get("input_tokens") or critic_usage.get("tokens_in") or 0)
+            c_tout = int(critic_usage.get("output_tokens") or critic_usage.get("tokens_out") or 0)
+            import cost_accounting
+            c_cost = cost_accounting.calculate_task_cost(
+                critic_model_str, c_tin, c_tout,
+                raw_cost_usd=critic_usage.get("cost_usd"),
+                is_invoice=bool(critic_usage.get("is_invoice")),
+            )
+            budget_ctrl.reconcile(critic_res_id, actual_cost_usd=c_cost.cost_usd, actual_tokens=(c_tin + c_tout))
+            critic_res_id = None
+    finally:
+        if critic_res_id:
+            budget_ctrl.release_reservation(critic_res_id)
+            critic_res_id = None
+
     chained = chain.existing(rc.RUNS, tid, row)
     if chained:
         chain.append_step(rc.RUNS, chain.Step.CRITIC, tid, attempt,
@@ -809,16 +953,68 @@ def _record_outcome(context: _TaskContext, out: str, usage: dict,
     tok_in, tok_out = scheduler.accumulated_tokens(
         mission_usage, row.get("tokens_in"), row.get("tokens_out"))
     import cost_accounting
-    task_cost = cost_accounting.calculate_task_cost(
-        worker_cfg.get("model") or row.get("model_used"),
-        tok_in,
-        tok_out,
-        raw_cost_usd=usage.get("cost_usd"),
+    w_model = worker_cfg.get("model") or row.get("model_used")
+    w_provider = worker_cfg.get("provider")
+    if w_provider and w_model and "/" not in w_model:
+        w_model = f"{w_provider}/{w_model}"
+    w_usage = worker_usage if worker_usage is not None else usage
+    w_tin = int(w_usage.get("input_tokens") or w_usage.get("tokens_in") or 0)
+    w_tout = int(w_usage.get("output_tokens") or w_usage.get("tokens_out") or 0)
+    worker_cost = cost_accounting.calculate_task_cost(
+        w_model,
+        w_tin,
+        w_tout,
+        raw_cost_usd=w_usage.get("cost_usd"),
+        is_invoice=bool(w_usage.get("is_invoice")),
     )
+    c_tin = int(critic_usage.get("input_tokens") or critic_usage.get("tokens_in") or 0)
+    c_tout = int(critic_usage.get("output_tokens") or critic_usage.get("tokens_out") or 0)
+    critic_cost = cost_accounting.calculate_task_cost(
+        critic_model_str,
+        c_tin,
+        c_tout,
+        raw_cost_usd=critic_usage.get("cost_usd"),
+        is_invoice=bool(critic_usage.get("is_invoice")),
+    )
+
+    prior_costs: list[cost_accounting.TaskCost] = []
+    if attempt > 1:
+        for a in range(1, attempt):
+            prev_cost_file = rc.RUNS / f"task{tid}_a{a}_cost.json"
+            if prev_cost_file.is_file():
+                try:
+                    c_data = json.loads(prev_cost_file.read_text(encoding="utf-8"))
+                    prior_costs.append(cost_accounting.TaskCost.from_dict(c_data))
+                except Exception:
+                    pass
+
+    # This attempt's distinct spend (worker + repair(s) + critic)
+    attempt_elements = [worker_cost] + (repair_costs or []) + [critic_cost]
+    attempt_cost = cost_accounting.combine_task_costs(attempt_elements)
+
+    # Persist THIS attempt's structured cost artifact
+    cost_file = rc.RUNS / f"task{tid}_a{attempt}_cost.json"
+    try:
+        cost_file.write_text(json.dumps(attempt_cost.to_dict(), indent=2) + "\n", encoding="utf-8")
+    except Exception:
+        pass
+
+    # Cumulative task spend across all attempts
+    task_cost = cost_accounting.combine_task_costs(prior_costs + [attempt_cost])
+
+    # Persist cumulative task cost artifact
+    total_cost_file = rc.RUNS / f"task{tid}_cost.json"
+    try:
+        total_cost_file.write_text(json.dumps(task_cost.to_dict(), indent=2) + "\n", encoding="utf-8")
+    except Exception:
+        pass
+
+    annotated_notes = (verdict_text[:450] if verdict_text else "") + f"\n[COST_BASIS: {task_cost.basis.value}]"
+
     ledger.finish_task(tid, artifacts=[str(dest.relative_to(rc.ROOT))], cost_usd=task_cost.cost_usd,
                        tokens_in=tok_in, tokens_out=tok_out,
                        critic_verdict=("needs_review" if verdict == "infra_failed" else verdict),
-                       critic_notes=verdict_text[:500], status=status,
+                       critic_notes=annotated_notes, status=status,
                        attempt_count=attempt)
 
     if chained:

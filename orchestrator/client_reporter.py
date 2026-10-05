@@ -69,16 +69,21 @@ def extract_keywords_from_deliverable(text: str) -> list[dict[str, Any]]:
     for table in parse_markdown_tables(text):
         for row in table:
             kw = row.get("Keyword") or row.get("keyword") or row.get("Search Query")
-            if kw and not kw.startswith("-"):
-                clean_kw = kw.strip("`\"'[]")
-                results.append({
-                    "keyword": clean_kw,
-                    "intent": row.get("Intent") or row.get("intent") or "commercial",
-                    "funnel_stage": row.get("Funnel Stage") or row.get("funnel_stage") or "consideration",
-                    "rationale": row.get("Rationale") or row.get("rationale") or "",
-                    "source_url": row.get("Source URL") or row.get("source_url") or "",
-                    "theme": row.get("Theme") or row.get("Funnel Stage") or clean_kw,
-                })
+            if not kw:
+                continue
+            clean_kw = kw.strip("`\"'[] \t\r\n")
+            if not clean_kw or len(clean_kw) < 2 or clean_kw.lower() in ("n/a", "none", "null", "-", "--", "``"):
+                continue
+            if clean_kw.startswith("-"):
+                continue
+            results.append({
+                "keyword": clean_kw,
+                "intent": row.get("Intent") or row.get("intent") or "commercial",
+                "funnel_stage": row.get("Funnel Stage") or row.get("funnel_stage") or "consideration",
+                "rationale": row.get("Rationale") or row.get("rationale") or "",
+                "source_url": row.get("Source URL") or row.get("source_url") or "",
+                "theme": row.get("Theme") or row.get("Funnel Stage") or clean_kw,
+            })
     return results
 
 
@@ -88,16 +93,19 @@ def extract_negatives_from_deliverable(text: str) -> list[dict[str, Any]]:
     for table in parse_markdown_tables(text):
         for row in table:
             neg = row.get("Negative Keyword") or row.get("negative_keyword") or row.get("Keyword")
-            if neg:
-                clean_neg = neg.strip("`\"'[]")
-                mt = row.get("Match Type") or row.get("match_type") or "Phrase"
-                results.append({
-                    "keyword": clean_neg,
-                    "match_type": mt.strip().capitalize(),
-                    "category": row.get("Category") or row.get("category") or "irrelevant_intent",
-                    "rationale": row.get("Budget Waste Rationale") or row.get("rationale") or "",
-                    "source_url": row.get("Source URL") or row.get("source_url") or "",
-                })
+            if not neg:
+                continue
+            clean_neg = neg.strip("`\"'[] \t\r\n")
+            if not clean_neg or len(clean_neg) < 2 or clean_neg.lower() in ("n/a", "none", "null", "-", "--", "``"):
+                continue
+            mt = row.get("Match Type") or row.get("match_type") or "Phrase"
+            results.append({
+                "keyword": clean_neg,
+                "match_type": str(mt).strip().capitalize(),
+                "category": row.get("Category") or row.get("category") or "irrelevant_intent",
+                "rationale": row.get("Budget Waste Rationale") or row.get("rationale") or "",
+                "source_url": row.get("Source URL") or row.get("source_url") or "",
+            })
     return results
 
 
@@ -108,15 +116,20 @@ def extract_ad_copies_from_deliverable(text: str) -> list[dict[str, Any]]:
         for row in table:
             comp = row.get("Component") or row.get("component") or ""
             copy_text = row.get("Copy Text") or row.get("copy_text") or row.get("Headline / Description") or ""
-            if comp and copy_text:
-                results.append({
-                    "format": row.get("Format") or row.get("format") or "RSA",
-                    "component": comp.strip(),
-                    "copy_text": copy_text.strip("`\"'"),
-                    "characters": row.get("Characters") or row.get("characters") or str(len(copy_text)),
-                    "cta": row.get("CTA") or row.get("cta") or "",
-                    "rationale": row.get("Source / Rationale") or row.get("Rationale") or "",
-                })
+            clean_comp = comp.strip("`\"' \t\r\n")
+            clean_text = copy_text.strip("`\"' \t\r\n")
+            if not clean_comp or not clean_text:
+                continue
+            if len(clean_text) < 3 or clean_text.lower() in ("n/a", "none", "null", "-", "--", "``"):
+                continue
+            results.append({
+                "format": row.get("Format") or row.get("format") or "RSA",
+                "component": clean_comp,
+                "copy_text": clean_text,
+                "characters": row.get("Characters") or row.get("characters") or str(len(clean_text)),
+                "cta": (row.get("CTA") or row.get("cta") or "").strip("`\"' \t\r\n"),
+                "rationale": (row.get("Source / Rationale") or row.get("Rationale") or "").strip(),
+            })
     return results
 
 
@@ -560,21 +573,56 @@ def compile_and_export_client_package(
     neg_entries = extract_negatives_from_deliverable(deliverables.get("negative_keyword_harvest", ""))
     ad_entries = extract_ad_copies_from_deliverable(deliverables.get("ad_copy_variants", ""))
 
-    # Fallback to seed keywords ONLY for draft/sample packages when research deliverables are pending
+    # Fallback to seed keywords ONLY for draft/sample packages when research deliverables are pending (R5)
     if not kw_entries and prof.get("seed_keywords"):
+        if not (is_draft or is_sample):
+            return {
+                "success": False,
+                "client_id": client_id,
+                "error": "EXPORT_BLOCKED",
+                "message": "Verified non-draft client package missing structured keyword deliverable cannot fall back to seed keywords",
+                "verification_status": "blocked",
+            }
         kw_entries = [{"keyword": kw, "theme": kw, "intent": "commercial"} for kw in prof["seed_keywords"]]
+
+    if not kw_entries and not (is_draft or is_sample):
+        return {
+            "success": False,
+            "client_id": client_id,
+            "error": "EXPORT_BLOCKED",
+            "message": "Verified non-draft client package missing structured keyword deliverable (0 parsed keywords)",
+            "verification_status": "blocked",
+        }
+
+    if not neg_entries and not (is_draft or is_sample):
+        return {
+            "success": False,
+            "client_id": client_id,
+            "error": "EXPORT_BLOCKED",
+            "message": "Verified non-draft client package missing structured negative keywords deliverable (0 parsed negatives)",
+            "verification_status": "blocked",
+        }
 
     # 2. Build Campaign structure via campaign_builder
     ad_copy_dicts: list[dict[str, Any]] = []
     if ad_entries:
         headlines = [a["copy_text"] for a in ad_entries if "headline" in a.get("component", "").lower()]
         descriptions = [a["copy_text"] for a in ad_entries if "description" in a.get("component", "").lower()]
-        if headlines or descriptions:
+        if headlines and descriptions:
             ad_copy_dicts.append({
                 "headlines": headlines,
                 "descriptions": descriptions,
                 "final_url": prof.get("landing_url", "https://example.com"),
             })
+
+    if not ad_copy_dicts and not (is_draft or is_sample):
+        return {
+            "success": False,
+            "client_id": client_id,
+            "error": "EXPORT_BLOCKED",
+            "message": "Verified non-draft client package missing structured ad copy variants (headlines and descriptions required; cannot fall back to generated generic copy)",
+            "verification_status": "blocked",
+        }
 
     prefix = "[SAMPLE] " if is_sample else "[DRAFT] " if is_draft else ""
     campaign_name = f"{prefix}{prof.get('display_name', client_id)} - Search - {prof.get('domain', 'Core')}"
@@ -587,6 +635,26 @@ def compile_and_export_client_package(
         campaign_name=campaign_name,
         verified_for_export=(not is_draft and not is_sample),
     )
+
+    # Substantive campaign entity check: verified client package cannot export with 0 keywords, 0 negatives, 0 ads, or 0 ad groups (RR3)
+    if not (is_draft or is_sample):
+        if (
+            len(campaign.ad_groups) == 0
+            or campaign.total_keywords() == 0
+            or campaign.total_negatives() == 0
+            or campaign.total_ads() == 0
+        ):
+            return {
+                "success": False,
+                "client_id": client_id,
+                "error": "EXPORT_BLOCKED",
+                "message": (
+                    f"Compiled campaign failed substantiveness check: "
+                    f"ad_groups={len(campaign.ad_groups)}, keywords={campaign.total_keywords()}, "
+                    f"negatives={campaign.total_negatives()}, ads={campaign.total_ads()}"
+                ),
+                "verification_status": "blocked",
+            }
 
     # 3. Export Google Ads Editor bulk CSV (defaulted strictly to Paused status)
     csv_path = cdir / "google_ads_editor_import.csv"

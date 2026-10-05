@@ -72,22 +72,27 @@ class EvidenceRecord:
             return False, "Claim value cannot be empty"
         if not self.source or not str(self.source).strip():
             return False, "Source cannot be empty"
-        if not self.source_date or not str(self.source_date).strip():
-            return False, "Source date cannot be empty"
         if not self.reviewer or not str(self.reviewer).strip():
             return False, "Reviewer cannot be empty"
-        if not self.reviewer_date or not str(self.reviewer_date).strip():
-            return False, "Reviewer date cannot be empty"
+        # Validate ISO date format (R5)
+        for dt_field, dt_val in [("source_date", self.source_date), ("reviewer_date", self.reviewer_date)]:
+            try:
+                cleaned = str(dt_val).strip().rstrip("Z")
+                from datetime import datetime as dt_cls
+                dt_cls.fromisoformat(cleaned)
+            except (ValueError, TypeError):
+                return False, f"Invalid {dt_field} format: '{dt_val}' is not a valid ISO date"
 
         # Check for placeholder field names passed as values
         fn = self.field_name or self.claim_value
         if self.field_name and self.claim_value.strip().lower() == self.field_name.strip().lower():
             return False, f"Claim value cannot be identical to field name '{self.field_name}'"
 
-        # Waste estimate claim requires authorized account extract or audit calculation
+        # Waste estimate claim requires authorized account extract or audit calculation (R5)
         if self.claim_type == ClaimType.WASTE_ESTIMATE:
             src_lower = self.source.lower()
-            if "operator_estimate" in src_lower and "authorized" not in src_lower and "extract" not in src_lower and "audit" not in src_lower:
+            valid_sources = ("authorized", "extract", "audit", "verified")
+            if not any(v in src_lower for v in valid_sources):
                 return False, "Waste estimate claim requires an authorized account extract, audit date range, or verified calculation"
 
         return True, None
@@ -105,6 +110,8 @@ class ProspectVerification:
     approved_for_export: bool = False
     export_blocked_reason: str | None = None
     approved_content_hash: str | None = None
+    approved_by: str | None = None
+    approved_at: str | None = None
 
     def add_evidence(self, evidence: EvidenceRecord) -> None:
         self.evidence.append(evidence)
@@ -151,6 +158,8 @@ class ProspectVerification:
                 "geo": profile.get("geo"),
                 "language": profile.get("language"),
                 "offer": profile.get("offer"),
+                "seed_keywords": sorted(profile.get("seed_keywords", [])),
+                "competitors": sorted(profile.get("competitors", [])),
                 "forbidden_claims": sorted(profile.get("forbidden_claims", [])),
             }
         if deliverables:
@@ -162,16 +171,56 @@ class ProspectVerification:
         return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
     def check_required_deliverables(self, deliverables: dict[str, str] | None) -> tuple[bool, list[str]]:
-        """Verify that all required research deliverables are complete and not pending."""
+        """Verify that all required research deliverables are complete, structured, and not failed/pending."""
         if deliverables is None:
             return False, ["deliverables_not_provided"]
         missing = []
+        error_indicators = (
+            "pending generation",
+            "error:",
+            "failed:",
+            "unavailable",
+            "research unavailable",
+            "tool unavailable",
+            "exception occurred",
+            "timed out",
+            "status 0",
+            "status 404",
+            "status 500",
+        )
         for req in REQUIRED_RESEARCH_DELIVERABLES:
             content = deliverables.get(req, "").strip()
             if not content:
                 missing.append(f"{req} missing")
-            elif "pending generation" in content.lower():
-                missing.append(f"{req} pending generation")
+                continue
+            low = content.lower()
+            if any(ind in low for ind in error_indicators):
+                missing.append(f"{req} contains failure/pending markers")
+                continue
+            if len(content) < 30:
+                missing.append(f"{req} insufficient content (<30 chars)")
+                continue
+
+            # Typed/structured content validation (RR3)
+            if req == "keyword_research":
+                from client_reporter import extract_keywords_from_deliverable
+                kws = extract_keywords_from_deliverable(content)
+                valid_kws = [k for k in kws if k.get("keyword") and len(str(k["keyword"]).strip()) >= 2]
+                if not valid_kws:
+                    missing.append(f"{req} contains 0 valid parsed keyword entries")
+            elif req == "negative_keyword_harvest":
+                from client_reporter import extract_negatives_from_deliverable
+                negs = extract_negatives_from_deliverable(content)
+                valid_negs = [n for n in negs if n.get("keyword") and len(str(n["keyword"]).strip()) >= 2]
+                if not valid_negs:
+                    missing.append(f"{req} contains 0 valid parsed negative keyword entries")
+            elif req == "ad_copy_variants":
+                from client_reporter import extract_ad_copies_from_deliverable
+                ads = extract_ad_copies_from_deliverable(content)
+                headlines = [a for a in ads if "headline" in a.get("component", "").lower() and len(str(a.get("copy_text", "")).strip()) >= 3]
+                descriptions = [a for a in ads if "description" in a.get("component", "").lower() and len(str(a.get("copy_text", "")).strip()) >= 3]
+                if not headlines or not descriptions:
+                    missing.append(f"{req} missing parsed RSA headlines or descriptions (headlines={len(headlines)}, descriptions={len(descriptions)})")
         return len(missing) == 0, missing
 
     def all_required_verified(self) -> tuple[bool, list[str]]:
@@ -226,8 +275,11 @@ class ProspectVerification:
         if not self.approved_for_export:
             return False, "Operator approval required for export"
 
-        # Content drift check against approved hash
-        if self.approved_content_hash and (profile is not None or deliverables is not None):
+        # Content drift check against approved hash: missing hash fails closed on package export (R5)
+        if profile is not None or deliverables is not None:
+            if not self.approved_content_hash:
+                self.export_blocked_reason = "Approval invalid: missing approved_content_hash digest"
+                return False, self.export_blocked_reason
             current_hash = self.compute_content_hash(profile, deliverables)
             if current_hash != self.approved_content_hash:
                 self.export_blocked_reason = "Approved content drift: profile or deliverable content modified since approval"
@@ -243,6 +295,10 @@ class ProspectVerification:
         deliverables: dict[str, str] | None = None,
     ) -> tuple[bool, str]:
         """Approve prospect package for client export, binding to content digest."""
+        rev = (reviewer or "").strip()
+        if not rev:
+            return False, "Cannot approve: reviewer must be a non-empty operator/auditor identifier"
+
         ok, missing = self.all_required_verified()
         if not ok:
             return False, f"Cannot approve: missing verified evidence ({', '.join(missing)})"
@@ -250,11 +306,15 @@ class ProspectVerification:
             deliv_ok, deliv_missing = self.check_required_deliverables(deliverables)
             if not deliv_ok:
                 return False, f"Cannot approve: incomplete research sections ({', '.join(deliv_missing)})"
+        else:
+            return False, "Cannot approve: deliverables must be provided for content hash binding"
 
         self.status = VerificationStatus.VERIFIED
         self.approved_for_export = True
         self.export_blocked_reason = None
         self.approved_content_hash = self.compute_content_hash(profile, deliverables)
+        self.approved_by = rev
+        self.approved_at = datetime.utcnow().isoformat() + "Z"
         self.updated_at = datetime.utcnow().isoformat() + "Z"
         return True, "Prospect verified and approved for export"
 
@@ -282,6 +342,8 @@ class ProspectVerification:
             "approved_for_export": self.approved_for_export,
             "export_blocked_reason": self.export_blocked_reason,
             "approved_content_hash": self.approved_content_hash,
+            "approved_by": self.approved_by,
+            "approved_at": self.approved_at,
         }
 
     @classmethod
@@ -304,6 +366,8 @@ class ProspectVerification:
             approved_for_export=data.get("approved_for_export", False),
             export_blocked_reason=data.get("export_blocked_reason"),
             approved_content_hash=data.get("approved_content_hash"),
+            approved_by=data.get("approved_by"),
+            approved_at=data.get("approved_at"),
         )
 
 

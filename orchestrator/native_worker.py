@@ -20,11 +20,13 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 import asyncio
 import contextlib
+import ipaddress
 import json
 import logging
 import os
 from pathlib import Path
 import re
+import socket
 import sys
 import time
 from typing import Any, Callable
@@ -291,15 +293,113 @@ def execute_web_fetch(url: str, char_limit: int = DEFAULT_CHAR_LIMIT, proxy: str
     }
 
 
+def _parse_ip_literal(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """Parse dotted, integer, hex, or octal IP representations into an IP address object (RR1)."""
+    clean = host.strip("[]").rstrip(".")
+    try:
+        return ipaddress.ip_address(clean)
+    except ValueError:
+        pass
+    # Integer, hex, or octal single-number representation (e.g. 2130706433, 0x7f000001, 017700000001)
+    try:
+        if clean.lower().startswith("0x"):
+            val = int(clean, 16)
+        elif clean.startswith("0") and len(clean) > 1 and clean.isdigit():
+            val = int(clean, 8)
+        elif clean.isdigit():
+            val = int(clean, 10)
+        else:
+            val = None
+        if val is not None and 0 <= val <= 0xFFFFFFFF:
+            return ipaddress.IPv4Address(val)
+    except ValueError:
+        pass
+    # Dotted decimal/octal/hex components (e.g. 0177.0.0.1, 0x7f.0.0.1)
+    parts = clean.split(".")
+    if len(parts) == 4:
+        try:
+            int_parts = []
+            for p in parts:
+                if p.lower().startswith("0x"):
+                    int_parts.append(int(p, 16))
+                elif p.startswith("0") and len(p) > 1 and p.isdigit():
+                    int_parts.append(int(p, 8))
+                elif p.isdigit():
+                    int_parts.append(int(p, 10))
+                else:
+                    return None
+            if all(0 <= x <= 255 for x in int_parts):
+                return ipaddress.IPv4Address(bytes(int_parts))
+        except ValueError:
+            pass
+    return None
+
+
+def is_safe_browser_url(url: str, allow_loopback: bool = False) -> tuple[bool, str]:
+    """Validate URL scheme and destination to prevent SSRF and local file leaks (R2/RR1)."""
+    if not isinstance(url, str) or not url.strip():
+        return False, "Empty URL"
+    if len(url) > 2048:
+        return False, "URL exceeds maximum length (2048 chars)"
+    try:
+        p = urlsplit(url)
+    except Exception as exc:
+        return False, f"Invalid URL: {exc}"
+
+    scheme = (p.scheme or "").lower()
+    if scheme not in ("http", "https"):
+        return False, f"Prohibited URL scheme '{scheme}': only http and https are permitted"
+
+    if p.username or p.password:
+        return False, "Userinfo in URL is prohibited"
+
+    raw_hostname = (p.hostname or "").lower()
+    if not raw_hostname:
+        return False, "Missing hostname in URL"
+
+    clean_host = raw_hostname.rstrip(".")
+
+    # 1. IP literal check (dotted decimal, integer, hex, octal)
+    ip_obj = _parse_ip_literal(clean_host)
+    if ip_obj is not None:
+        if ip_obj.is_loopback:
+            if not allow_loopback:
+                return False, f"Access to loopback IP '{raw_hostname}' is blocked"
+        elif ip_obj.is_private or ip_obj.is_reserved or ip_obj.is_link_local:
+            return False, f"Access to private/reserved IP '{raw_hostname}' is blocked"
+        return True, ""
+
+    # 2. Well-known loopback hostnames
+    if clean_host in ("localhost", "localho.st") or clean_host.endswith(".localhost"):
+        if not allow_loopback:
+            return False, f"Access to loopback domain '{raw_hostname}' is blocked"
+        return True, ""
+
+    # 3. Hostname DNS resolution to detect rebinding or alias to loopback/private IPs
+    try:
+        addr_infos = socket.getaddrinfo(clean_host, None)
+        for _, _, _, _, sockaddr in addr_infos:
+            resolved_ip_str = sockaddr[0]
+            try:
+                res_ip = ipaddress.ip_address(resolved_ip_str)
+                if res_ip.is_loopback:
+                    if not allow_loopback:
+                        return False, f"Destination host '{raw_hostname}' resolves to loopback IP '{resolved_ip_str}'"
+                elif res_ip.is_private or res_ip.is_reserved or res_ip.is_link_local:
+                    return False, f"Destination host '{raw_hostname}' resolves to private/reserved IP '{resolved_ip_str}'"
+            except ValueError:
+                pass
+    except (socket.gaierror, UnicodeError):
+        pass
+
+    return True, ""
+
+
 def _acquire_cdp_page_target(host: str, port: int, timeout: float = 2.0) -> tuple[str, str]:
     """Acquire an isolated CDP Page target, preferring a fresh tab via PUT /json/new.
 
-    Returns:
-        (target_id, ws_url)
-    Raises:
-        RuntimeError if no page target can be acquired.
+    Fails closed if creation fails; never borrows existing tabs (R3).
     """
-    # 1. Try PUT /json/new to create a dedicated isolated target
     try:
         req = urllib.request.Request(f"http://{host}:{port}/json/new?about:blank", method="PUT")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -308,21 +408,10 @@ def _acquire_cdp_page_target(host: str, port: int, timeout: float = 2.0) -> tupl
             ws = data.get("webSocketDebuggerUrl")
             if tid and ws:
                 return tid, ws
-    except Exception:
-        pass
-
-    # 2. Fallback to GET /json/list for existing page targets
-    try:
-        req = urllib.request.Request(f"http://{host}:{port}/json/list")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            targets = json.loads(resp.read().decode("utf-8"))
-            for t in targets:
-                if t.get("type") == "page" and t.get("webSocketDebuggerUrl"):
-                    return t.get("id", ""), t["webSocketDebuggerUrl"]
     except Exception as exc:
-        raise RuntimeError(f"Failed to query CDP targets at http://{host}:{port}: {exc}") from exc
+        raise RuntimeError(f"Failed to acquire fresh CDP page target on http://{host}:{port}: {exc}") from exc
 
-    raise RuntimeError(f"No available Page target found on CDP endpoint http://{host}:{port}")
+    raise RuntimeError(f"No Page target created on CDP endpoint http://{host}:{port}")
 
 
 def _close_cdp_page_target(host: str, port: int, target_id: str, timeout: float = 1.5) -> None:
@@ -338,119 +427,289 @@ def _close_cdp_page_target(host: str, port: int, target_id: str, timeout: float 
 
 
 async def _async_cdp_extract(
-    ws_url: str,
+    host: str,
+    port: int,
     url: str,
     selector: str = "body",
     timeout: float = 15.0,
+    allow_loopback: bool = False,
+    check_estop: bool = True,
 ) -> dict[str, Any]:
-    """Perform CDP commands over WebSocket with strict request-ID routing and bounded timeouts."""
-    async with websockets.connect(ws_url, ping_interval=None) as ws:
-        next_cmd_id = 1
-        pending: dict[int, asyncio.Future] = {}
-        event_queue: asyncio.Queue = asyncio.Queue()
+    """Perform CDP commands over WebSocket with dedicated browser context isolation (R3),
+    main-document response status capture (R4), selector polling deadline (R4), and dynamic ESTOP checks.
+    """
+    v_url = f"http://{host}:{port}/json/version"
+    try:
+        req = urllib.request.Request(v_url)
+        with urllib.request.urlopen(req, timeout=3.0) as resp:
+            v_data = json.loads(resp.read().decode("utf-8"))
+            browser_ws = v_data.get("webSocketDebuggerUrl")
+            if not browser_ws:
+                raise RuntimeError(f"webSocketDebuggerUrl missing in CDP version response from {v_url}")
+    except Exception as exc:
+        raise RuntimeError(f"Failed to query CDP browser endpoint at {v_url}: {exc}") from exc
 
-        async def send_cmd(method: str, params: dict | None = None) -> dict:
-            nonlocal next_cmd_id
-            cid = next_cmd_id
-            next_cmd_id += 1
-            fut = asyncio.get_running_loop().create_future()
-            pending[cid] = fut
-            await ws.send(json.dumps({"id": cid, "method": method, "params": params or {}}))
-            return await fut
-
-        async def reader_loop():
+    # Connect to browser endpoint and allocate an isolated browser context (R3)
+    async with websockets.connect(browser_ws, ping_interval=None) as bws:
+        b_next_id = 1
+        async def send_bcmd(method: str, params: dict | None = None) -> dict:
+            nonlocal b_next_id
+            cid = b_next_id
+            b_next_id += 1
+            await bws.send(json.dumps({"id": cid, "method": method, "params": params or {}}))
             while True:
-                try:
-                    raw = await ws.recv()
-                except Exception:
-                    break
-                try:
-                    msg = json.loads(raw)
-                except Exception:
-                    continue
-                if "id" in msg and msg["id"] in pending:
-                    fut = pending.pop(msg["id"])
-                    if not fut.done():
-                        fut.set_result(msg)
-                elif "method" in msg:
-                    await event_queue.put(msg)
+                raw = await bws.recv()
+                msg = json.loads(raw)
+                if msg.get("id") == cid:
+                    return msg
 
-        reader_task = asyncio.create_task(reader_loop())
+        ctx_res = await send_bcmd("Target.createBrowserContext")
+        if "error" in ctx_res or not ctx_res.get("result", {}).get("browserContextId"):
+            raise RuntimeError(f"Target.createBrowserContext failed: {ctx_res.get('error', ctx_res)}")
+        ctx_id = ctx_res["result"]["browserContextId"]
+
+        # Create target in that isolated context
+        tgt_res = await send_bcmd("Target.createTarget", {"url": "about:blank", "browserContextId": ctx_id})
+        if "error" in tgt_res or not tgt_res.get("result", {}).get("targetId"):
+            await send_bcmd("Target.disposeBrowserContext", {"browserContextId": ctx_id})
+            raise RuntimeError(f"Target.createTarget failed in context {ctx_id}: {tgt_res.get('error', tgt_res)}")
+        tid = tgt_res["result"]["targetId"]
+
+        page_ws = f"ws://{host}:{port}/devtools/page/{tid}"
         try:
-            # 1. Enable Page and Runtime domains
-            p_res = await send_cmd("Page.enable")
-            if "error" in p_res:
-                raise RuntimeError(f"Page.enable failed: {p_res['error']}")
-            r_res = await send_cmd("Runtime.enable")
-            if "error" in r_res:
-                raise RuntimeError(f"Runtime.enable failed: {r_res['error']}")
+            async with websockets.connect(page_ws, ping_interval=None) as pws:
+                p_next_id = 1
+                pending: dict[int, asyncio.Future] = {}
+                events: asyncio.Queue = asyncio.Queue()
+                blocked_requests: list[tuple[str, str]] = []
+                main_frame_id: str | None = None
+                main_loader_id: str | None = None
 
-            # 2. Navigate
-            nav_res = await send_cmd("Page.navigate", {"url": url})
-            if "error" in nav_res:
-                raise RuntimeError(f"Page.navigate failed: {nav_res['error']}")
-            nav_result = nav_res.get("result", {})
-            if nav_result.get("errorText"):
-                raise RuntimeError(f"Navigation error: {nav_result['errorText']}")
+                def next_pid() -> int:
+                    nonlocal p_next_id
+                    cid = p_next_id
+                    p_next_id += 1
+                    return cid
 
-            # 3. Wait for load event or readyState
-            nav_deadline = time.monotonic() + min(timeout, 8.0)
-            while time.monotonic() < nav_deadline:
+                async def send_pcmd(method: str, params: dict | None = None) -> dict:
+                    cid = next_pid()
+                    fut = asyncio.get_running_loop().create_future()
+                    pending[cid] = fut
+                    await pws.send(json.dumps({"id": cid, "method": method, "params": params or {}}))
+                    return await fut
+
+                async def reader_loop():
+                    while True:
+                        try:
+                            raw = await pws.recv()
+                        except Exception:
+                            break
+                        try:
+                            msg = json.loads(raw)
+                        except Exception:
+                            continue
+                        if "id" in msg and msg["id"] in pending:
+                            fut = pending.pop(msg["id"])
+                            if not fut.done():
+                                fut.set_result(msg)
+                        elif "method" in msg:
+                            m = msg.get("method")
+                            if m == "Fetch.requestPaused":
+                                params = msg.get("params", {})
+                                r_id = params.get("requestId")
+                                r_url = params.get("request", {}).get("url", "")
+                                safe, why = is_safe_browser_url(r_url, allow_loopback=allow_loopback)
+                                if safe:
+                                    cont = json.dumps({"id": next_pid(), "method": "Fetch.continueRequest", "params": {"requestId": r_id}})
+                                    await pws.send(cont)
+                                else:
+                                    fail = json.dumps({"id": next_pid(), "method": "Fetch.failRequest", "params": {"requestId": r_id, "errorReason": "AccessDenied"}})
+                                    await pws.send(fail)
+                                    blocked_requests.append((r_url, why))
+                            else:
+                                await events.put(msg)
+
+                reader_task = asyncio.create_task(reader_loop())
                 try:
-                    event = await asyncio.wait_for(event_queue.get(), timeout=0.4)
-                    if event.get("method") in ("Page.loadEventFired", "Page.domContentEventFired"):
-                        break
-                except asyncio.TimeoutError:
-                    try:
-                        doc_state = await send_cmd("Runtime.evaluate", {
-                            "expression": "document.readyState",
+                    await send_pcmd("Fetch.enable", {"patterns": [{"urlPattern": "*"}]})
+                    await send_pcmd("Page.enable")
+                    await send_pcmd("Network.enable")
+                    await send_pcmd("Runtime.enable")
+
+                    nav_res = await send_pcmd("Page.navigate", {"url": url})
+                    if "error" in nav_res:
+                        raise RuntimeError(f"Page.navigate failed: {nav_res['error']}")
+                    nav_result = nav_res.get("result", {})
+                    main_frame_id = nav_result.get("frameId")
+                    main_loader_id = nav_result.get("loaderId")
+                    err_text = nav_result.get("errorText")
+
+                    if blocked_requests:
+                        b_url, b_reason = blocked_requests[0]
+                        return {
+                            "found": False,
+                            "title": "",
+                            "text": "",
+                            "status": 403,
+                            "final_url": b_url,
+                            "error": f"Access blocked: {b_reason}",
+                            "blocked": True,
+                        }
+
+                    if err_text:
+                        if "ERR_BLOCKED_BY_CLIENT" in err_text or "ERR_ACCESS_DENIED" in err_text:
+                            return {
+                                "found": False,
+                                "title": "",
+                                "text": "",
+                                "status": 403,
+                                "final_url": url,
+                                "error": f"Access blocked: {err_text}",
+                                "blocked": True,
+                            }
+                        if "ERR_HTTP_RESPONSE_CODE_FAILURE" not in err_text:
+                            raise RuntimeError(f"Navigation error: {err_text}")
+
+                    http_status = None
+                    final_url = url
+
+                    nav_deadline = time.monotonic() + min(timeout, 8.0)
+                    while time.monotonic() < nav_deadline:
+                        if blocked_requests:
+                            b_url, b_reason = blocked_requests[0]
+                            return {
+                                "found": False,
+                                "title": "",
+                                "text": "",
+                                "status": 403,
+                                "final_url": b_url,
+                                "error": f"Access blocked: {b_reason}",
+                                "blocked": True,
+                            }
+                        try:
+                            ev = await asyncio.wait_for(events.get(), timeout=0.2)
+                            m = ev.get("method")
+                            if m == "Network.responseReceived":
+                                params = ev.get("params", {})
+                                resp_frame_id = params.get("frameId")
+                                resp_type = params.get("type")
+                                # RR7: Only match main frame document responses
+                                is_main = (resp_frame_id and main_frame_id and resp_frame_id == main_frame_id) or (not main_frame_id and resp_type == "Document")
+                                if is_main and resp_type in ("Document", "Other"):
+                                    resp = params.get("response", {})
+                                    if resp.get("status"):
+                                        http_status = resp.get("status")
+                                        final_url = resp.get("url") or final_url
+                                        if http_status >= 400:
+                                            break
+                            elif m == "Network.requestWillBeSent":
+                                redirect = ev.get("params", {}).get("redirectResponse")
+                                if redirect:
+                                    red_url = ev.get("params", {}).get("request", {}).get("url", "")
+                                    is_safe, reason = is_safe_browser_url(red_url, allow_loopback=allow_loopback)
+                                    if not is_safe:
+                                        return {
+                                            "found": False,
+                                            "title": "",
+                                            "text": "",
+                                            "status": 403,
+                                            "final_url": red_url,
+                                            "error": f"Access blocked: {reason}",
+                                            "blocked": True,
+                                        }
+                            elif m in ("Page.loadEventFired", "Page.domContentEventFired"):
+                                break
+                        except asyncio.TimeoutError:
+                            doc_st = await send_pcmd("Runtime.evaluate", {
+                                "expression": "document.readyState",
+                                "returnByValue": True,
+                            })
+                            st_val = doc_st.get("result", {}).get("result", {}).get("value")
+                            if st_val in ("interactive", "complete"):
+                                break
+
+                    if blocked_requests:
+                        b_url, b_reason = blocked_requests[0]
+                        return {
+                            "found": False,
+                            "title": "",
+                            "text": "",
+                            "status": 403,
+                            "final_url": b_url,
+                            "error": f"Access blocked: {b_reason}",
+                            "blocked": True,
+                        }
+
+                    if http_status is None and err_text and "ERR_HTTP_RESPONSE_CODE_FAILURE" in err_text:
+                        http_status = 404
+
+                    if http_status and http_status >= 400:
+                        return {
+                            "found": False,
+                            "title": "",
+                            "text": "",
+                            "status": http_status,
+                            "final_url": final_url,
+                            "error": f"HTTP {http_status}",
+                        }
+
+                    # Selector polling loop within deadline (R4)
+                    poll_deadline = time.monotonic() + timeout
+                    res_val = None
+                    eval_expr = (
+                        f"(() => {{\n"
+                        f"    const sel = {json.dumps(selector or 'body')};\n"
+                        f"    const el = document.querySelector(sel);\n"
+                        f"    if (!el) {{\n"
+                        f"        return {{\n"
+                        f"            found: false,\n"
+                        f"            title: document.title || '',\n"
+                        f"            error: 'Selector \"' + sel + '\" not found in rendered DOM'\n"
+                        f"        }};\n"
+                        f"    }}\n"
+                        f"    const text = (el.innerText || el.textContent || '').trim();\n"
+                        f"    return {{\n"
+                        f"        found: true,\n"
+                        f"        text: text,\n"
+                        f"        title: document.title || '',\n"
+                        f"        html: el.outerHTML || ''\n"
+                        f"    }};\n"
+                        f"}})()"
+                    )
+
+                    while time.monotonic() < poll_deadline:
+                        if check_estop and pause_engaged():
+                            raise RuntimeError("Browser extraction aborted: global ESTOP engaged during execution")
+                        eval_res = await send_pcmd("Runtime.evaluate", {
+                            "expression": eval_expr,
                             "returnByValue": True,
                         })
-                        st_val = doc_state.get("result", {}).get("result", {}).get("value")
-                        if st_val in ("interactive", "complete"):
+                        val = eval_res.get("result", {}).get("result", {}).get("value", {})
+                        if isinstance(val, dict) and val.get("found"):
+                            res_val = val
                             break
-                    except Exception:
-                        pass
+                        await asyncio.sleep(0.1)
 
-            # 4. Small settling delay for scripts / dynamic timers
-            await asyncio.sleep(0.15)
+                    if not res_val:
+                        res_val = {
+                            "found": False,
+                            "title": "",
+                            "error": f"Selector '{selector}' not found in rendered DOM within deadline ({timeout:.1f}s)",
+                        }
 
-            # 5. Extract selector and DOM text via Runtime.evaluate
-            eval_expr = (
-                f"(() => {{\n"
-                f"    const sel = {json.dumps(selector or 'body')};\n"
-                f"    const el = document.querySelector(sel);\n"
-                f"    if (!el) {{\n"
-                f"        return {{\n"
-                f"            found: false,\n"
-                f"            title: document.title || '',\n"
-                f"            error: 'Selector \"' + sel + '\" not found in rendered DOM'\n"
-                f"        }};\n"
-                f"    }}\n"
-                f"    const text = (el.innerText || el.textContent || '').trim();\n"
-                f"    return {{\n"
-                f"        found: true,\n"
-                f"        text: text,\n"
-                f"        title: document.title || '',\n"
-                f"        html: el.outerHTML || ''\n"
-                f"    }};\n"
-                f"}})()"
-            )
-            eval_res = await send_cmd("Runtime.evaluate", {
-                "expression": eval_expr,
-                "returnByValue": True,
-            })
-            if "error" in eval_res:
-                raise RuntimeError(f"Runtime.evaluate failed: {eval_res['error']}")
-
-            res_val = eval_res.get("result", {}).get("result", {}).get("value")
-            if not isinstance(res_val, dict):
-                raise RuntimeError(f"Unexpected evaluate result: {res_val}")
-            return res_val
+                    res_val["status"] = http_status or (200 if res_val.get("found") else 404)
+                    res_val["final_url"] = final_url
+                    return res_val
+                finally:
+                    reader_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await reader_task
         finally:
-            reader_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await reader_task
+            # Clean up target and dispose isolated browser context (R3)
+            with contextlib.suppress(Exception):
+                await send_bcmd("Target.closeTarget", {"targetId": tid})
+            with contextlib.suppress(Exception):
+                await send_bcmd("Target.disposeBrowserContext", {"browserContextId": ctx_id})
 
 
 def execute_browser_extract(
@@ -461,16 +720,16 @@ def execute_browser_extract(
     timeout: float = 15.0,
     char_limit: int = DEFAULT_CHAR_LIMIT,
     check_estop: bool = True,
+    allow_loopback: bool = False,
 ) -> dict[str, Any]:
     """Extract rendered content via headless Chrome CDP daemon.
-
-    Uses Chrome DevTools Protocol (CDP) over WebSocket to navigate, execute JavaScript,
-    and extract rendered DOM content.
 
     Fail-closed guarantees:
     - Never falls back silently to HTTP fetch; reports honest failure if CDP is offline.
     - Rejects execution if ESTOP is engaged (unless explicitly bypassed for offline fixtures).
-    - Closes page target tab after extraction to prevent session residue.
+    - Blocks file://, javascript:, data:, and private IP navigation outside policy (R2).
+    - Executes inside a fresh isolated browser context and disposes it on completion (R3).
+    - Captures actual main-document HTTP response status (e.g. 404/500) and polls selector (R4).
     """
     if check_estop and pause_engaged():
         return {
@@ -482,6 +741,20 @@ def execute_browser_extract(
             "error": "Browser extraction refused: global ESTOP is engaged",
             "is_browser_rendered": False,
             "blocked": False,
+        }
+
+    # Scheme and destination policy check (R2)
+    is_safe, url_reason = is_safe_browser_url(url, allow_loopback=allow_loopback)
+    if not is_safe:
+        return {
+            "url": url,
+            "title": "",
+            "content": "",
+            "status": 403,
+            "bytes_read": 0,
+            "error": f"Prohibited destination: {url_reason}",
+            "is_browser_rendered": False,
+            "blocked": True,
         }
 
     # Check optional dependencies first
@@ -534,25 +807,18 @@ def execute_browser_extract(
             "blocked": False,
         }
 
-    target_id = None
-    try:
-        target_id, ws_url = _acquire_cdp_page_target(host=host, port=port)
-    except Exception as exc:
-        return {
-            "url": url,
-            "title": "",
-            "content": "",
-            "status": 0,
-            "bytes_read": 0,
-            "error": f"Failed to acquire CDP page target: {exc}",
-            "is_browser_rendered": False,
-            "blocked": False,
-        }
-
     try:
         res_data = asyncio.run(asyncio.wait_for(
-            _async_cdp_extract(ws_url=ws_url, url=url, selector=selector, timeout=timeout),
-            timeout=timeout + 2.0,
+            _async_cdp_extract(
+                host=host,
+                port=port,
+                url=url,
+                selector=selector,
+                timeout=timeout,
+                allow_loopback=allow_loopback,
+                check_estop=check_estop,
+            ),
+            timeout=timeout + 3.0,
         ))
     except asyncio.TimeoutError:
         return {
@@ -576,42 +842,42 @@ def execute_browser_extract(
             "is_browser_rendered": False,
             "blocked": False,
         }
-    finally:
-        if target_id:
-            _close_cdp_page_target(host=host, port=port, target_id=target_id)
 
-    if not res_data.get("found"):
-        return {
-            "url": url,
-            "title": res_data.get("title", ""),
-            "content": "",
-            "status": 404,
-            "bytes_read": 0,
-            "error": res_data.get("error", f"Selector '{selector}' not found in rendered DOM"),
-            "is_browser_rendered": True,
-            "blocked": False,
-        }
-
-    text = res_data.get("text", "")
+    status = res_data.get("status", 200)
+    final_url = res_data.get("final_url", url)
     title = res_data.get("title", "")
+    text = res_data.get("text", "")
 
-    is_bot, bot_reason = detect_access_block(200, text, title)
-    if is_bot:
+    is_bot, bot_reason = detect_access_block(status, text, title)
+    if is_bot or status >= 400:
+        err_msg = bot_reason or f"HTTP {status}"
         return {
-            "url": url,
+            "url": final_url,
             "title": title,
             "content": "",
-            "status": 403,
+            "status": status,
             "bytes_read": len(text.encode("utf-8")),
-            "error": f"Access blocked: {bot_reason}",
+            "error": f"Access blocked: {err_msg}",
             "blocked": True,
             "is_browser_rendered": True,
             "pivot_guidance": (
-                f"Target URL {url} presented an anti-bot verification challenge ({bot_reason}). "
+                f"Target URL {final_url} returned error ({err_msg}). "
                 "DO NOT attempt to re-fetch this exact URL. Formulate alternative web_search queries "
                 "targeting third-party reviews, news coverage, directory profiles (G2, Capterra, GitHub, SEC filings), "
                 "or competitor comparisons."
             ),
+        }
+
+    if not res_data.get("found"):
+        return {
+            "url": final_url,
+            "title": title,
+            "content": "",
+            "status": status if status != 200 else 404,
+            "bytes_read": 0,
+            "error": res_data.get("error", f"Selector '{selector}' not found in rendered DOM"),
+            "is_browser_rendered": True,
+            "blocked": False,
         }
 
     if len(text) > char_limit:
@@ -620,10 +886,10 @@ def execute_browser_extract(
         text = text[:head] + "\n\n[...TRUNCATED FOR LENGTH...]\n\n" + text[-tail:]
 
     return {
-        "url": url,
+        "url": final_url,
         "title": title,
         "content": text,
-        "status": 200,
+        "status": status,
         "bytes_read": len(text.encode("utf-8")),
         "error": "",
         "is_browser_rendered": True,
@@ -693,7 +959,7 @@ def dispatch_tool_call(name: str, args: dict[str, Any]) -> str:
     elif name == "browser_extract":
         u = args.get("url", "")
         s = args.get("selector", "body")
-        res = execute_browser_extract(u, selector=s)
+        res = execute_browser_extract(u, selector=s, allow_loopback=False)
         return json.dumps(res, indent=2)
     else:
         return json.dumps({"error": f"Unknown tool: {name}"})
@@ -887,6 +1153,8 @@ def run_native_research_turn(
     custom_caller: Callable[[list[dict[str, Any]], list[dict[str, Any]]], dict[str, Any]] | None = None,
     root: Path | str | None = None,
     enforce_active_research: bool = False,
+    budget_ctrl: Any | None = None,
+    res_id: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Execute one autonomous research turn natively without external CLI dependencies.
 
@@ -928,6 +1196,27 @@ def run_native_research_turn(
     fetched_evidence: list[dict[str, Any]] = []
 
     for turn_idx in range(max_turns):
+        if budget_ctrl is not None and budget_ctrl.is_enforced():
+            from budget_controller import BudgetExhaustedError
+            rem_tok = min(
+                budget_ctrl.remaining_task_tokens(reservation_id=res_id),
+                budget_ctrl.remaining_shared_tokens(reservation_id=res_id),
+            )
+            rem_usd = min(
+                budget_ctrl.remaining_task_budget_usd(reservation_id=res_id),
+                budget_ctrl.remaining_shared_budget_usd(reservation_id=res_id),
+            )
+            if rem_tok <= 0 or rem_usd <= 0:
+                raise BudgetExhaustedError(
+                    f"Budget exhausted before turn {turn_idx}: remaining_tokens={rem_tok}, remaining_usd={rem_usd:.6f}"
+                )
+            if turn_idx > 0:
+                est_next = max(500, int((total_in + total_out) / turn_idx))
+                if rem_tok < est_next:
+                    raise BudgetExhaustedError(
+                        f"Budget exhausted before turn {turn_idx}: next call demand ({est_next}) exceeds remaining ({rem_tok})"
+                    )
+
         api_calls += 1
         if custom_caller is not None:
             # Deterministic/mock caller for tests & offline suites
@@ -940,6 +1229,18 @@ def run_native_research_turn(
         out_tok = int(resp.get("output_tokens", 0))
         total_in += in_tok
         total_out += out_tok
+
+        if budget_ctrl is not None and budget_ctrl.is_enforced():
+            import cost_accounting
+            from budget_controller import BudgetExhaustedError
+            turn_cost = cost_accounting.calculate_task_cost(
+                model_cfg.get("model") or "native", in_tok, out_tok
+            ).cost_usd or 0.0
+            budget_ctrl.record_turn_spend(
+                turn_tokens=(in_tok + out_tok),
+                turn_usd=turn_cost,
+                reservation_id=res_id,
+            )
 
         msg = resp.get("message", {})
         tool_calls = msg.get("tool_calls", [])

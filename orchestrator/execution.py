@@ -39,6 +39,7 @@ import re
 import subprocess
 import shutil
 from dataclasses import dataclass
+from typing import Any
 
 # Paths and logging are shared via runtime_context.py (Move 5a) so every
 # orchestrator module writes to the same run-scoped log stream.
@@ -49,7 +50,11 @@ import trajectory  # noqa: E402 — P0 unified task trace
 import egress_policy  # noqa: E402
 import worker_sandbox  # noqa: E402
 import yaml  # for load_fallback_chain()
-from execution_pause import pause_engaged  # noqa: E402
+import execution_pause  # noqa: E402
+
+
+def pause_engaged() -> bool:
+    return execution_pause.pause_engaged()
 
 # Module constants needed by the moved functions.
 WORKER_TIMEOUT_S = 1800
@@ -65,7 +70,10 @@ RESPONSE_RESERVE_TOKENS = 1500   # a deliverable still has to fit in the reply
 def hermes_worker(prompt: str, model_cfg: dict, usage_path: Path,
                   timeout: int = WORKER_TIMEOUT_S,
                   retrieval_profile: str | None = None,
-                  mission_id: str | None = None) -> tuple[str, dict]:
+                  mission_id: str | None = None,
+                  enforce_active_research: bool = False,
+                  budget_ctrl: Any | None = None,
+                  **extra_kwargs: Any) -> tuple[str, dict]:
     # SECURITY (docs/INCIDENTS.md 2026-07-18): an unrestricted worker previously wrote
     # its own rows straight into ledger.db/ledgerbook.db and self-graded its own task.
     # Tried `-t web` to strip file/terminal/code tools -- it does NOT map to a real
@@ -82,6 +90,8 @@ def hermes_worker(prompt: str, model_cfg: dict, usage_path: Path,
     #
     # Phase 4 (Munder Blueprint §5): workers are now contained in Windows Job
     # Objects with KILL_ON_JOB_CLOSE, ensuring orphan-free termination.
+    if pause_engaged():
+        raise RuntimeError("model execution refused: global ESTOP is engaged")
     hermes_exe = shutil.which("hermes")
     if not hermes_exe:
         raise FileNotFoundError("hermes executable not found")
@@ -270,7 +280,10 @@ def native_worker(prompt: str, model_cfg: dict, usage_path: Path,
                   timeout: int = WORKER_TIMEOUT_S,
                   retrieval_profile: str | None = None,
                   mission_id: str | None = None,
-                  enforce_active_research: bool = False) -> tuple[str, dict]:
+                  enforce_active_research: bool = False,
+                  budget_ctrl: Any | None = None,
+                  res_id: str | None = None,
+                  **extra_kwargs: Any) -> tuple[str, dict]:
     """Execute research worker using native agent loop (native_worker.py)."""
     if pause_engaged():
         raise RuntimeError("model execution refused: global ESTOP is engaged")
@@ -317,6 +330,8 @@ def native_worker(prompt: str, model_cfg: dict, usage_path: Path,
                     notebook_path=notebook_path,
                     custom_caller=custom_caller,
                     enforce_active_research=enforce_active_research,
+                    budget_ctrl=budget_ctrl,
+                    res_id=res_id,
                 )
         return out, usage
     except Exception as exc:
@@ -512,6 +527,7 @@ def worker_with_failover(prompt: str, worker_cfg: dict, usage_path: Path,
                          retrieval_profile: str | None = None,
                          mission_id: str | None = None,
                          enforce_active_research: bool = False,
+                         budget_ctrl: Any | None = None,
                          **extra_worker_options
                          ) -> tuple[str, dict, dict, bool]:
     """hermes_worker() with failover on QUOTA ERRORS ONLY. A genuine subprocess timeout
@@ -549,6 +565,22 @@ def worker_with_failover(prompt: str, worker_cfg: dict, usage_path: Path,
                     reason=_context_skip_note(cfg, prompt), rung=i + 1,
                     total_rungs=len(candidates))
             continue
+
+        if i > 0 and budget_ctrl is not None and budget_ctrl.is_enforced():
+            c_str = f"{cfg.get('provider')}/{cfg.get('model')}"
+            import cost_accounting
+            probe = cost_accounting.calculate_task_cost(c_str, 100, 100)
+            if probe.basis == cost_accounting.CostBasis.UNKNOWN and (
+                budget_ctrl.max_budget_usd is not None or budget_ctrl.shared_max_budget_usd is not None
+            ):
+                log(f"{log_prefix}: skipping {c_str} ({i+1}/{len(candidates)}) — unpriced model under hard_stop budget")
+                continue
+            rem_tok = min(budget_ctrl.remaining_task_tokens(), budget_ctrl.remaining_shared_tokens())
+            rem_usd = min(budget_ctrl.remaining_task_budget_usd(), budget_ctrl.remaining_shared_budget_usd())
+            if rem_tok <= 0 or rem_usd <= 0:
+                log(f"{log_prefix}: budget exhausted, stopping failover chain")
+                break
+
         if i == 0 and tw:
             tw.provider_selected(cfg["provider"], cfg["model"],
                                  rung=1, total_rungs=len(candidates))
@@ -569,10 +601,14 @@ def worker_with_failover(prompt: str, worker_cfg: dict, usage_path: Path,
             "timeout": timeout,
             "mission_id": mission_id,
         }
+        if budget_ctrl is not None:
+            worker_kwargs["budget_ctrl"] = budget_ctrl
         if retrieval_profile:
             worker_kwargs["retrieval_profile"] = retrieval_profile
         if worker_engine == "native":
             worker_kwargs["enforce_active_research"] = enforce_active_research
+        if extra_worker_options.get("res_id"):
+            worker_kwargs["res_id"] = extra_worker_options["res_id"]
         out, usage = worker_fn(prompt, cfg, attempt_path, **worker_kwargs)
         cfg_used = cfg
         failed = worker_failed(out, usage)
