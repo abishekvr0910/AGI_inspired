@@ -49,8 +49,14 @@ import websockets
 class ChromeBrowserContext:
     """Manages an ephemeral headless Chrome process and CDP tab session for UI testing."""
 
-    def __init__(self, cdp_port: int = 9448) -> None:
-        self.cdp_port = cdp_port
+    def __init__(self, cdp_port: int = 0) -> None:
+        if cdp_port <= 0:
+            import socket
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(("127.0.0.1", 0))
+                self.cdp_port = s.getsockname()[1]
+        else:
+            self.cdp_port = cdp_port
         self.temp_dir = tempfile.mkdtemp(prefix="agi_chrome_webui_")
         self.proc: subprocess.Popen | None = None
         self.chrome_path = find_browser_executable()
@@ -79,6 +85,8 @@ class ChromeBrowserContext:
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,
         )
+        if not self.proc or not self.proc.pid:
+            return False
 
         deadline = time.time() + 8.0
         while time.time() < deadline:
@@ -107,8 +115,8 @@ class TestWebUIBrowserAcceptance(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.cdp_port = 9448
-        cls.browser_ctx = ChromeBrowserContext(cdp_port=cls.cdp_port)
+        cls.browser_ctx = ChromeBrowserContext(cdp_port=0)
+        cls.cdp_port = cls.browser_ctx.cdp_port
         cls.browser_available = cls.browser_ctx.start()
 
     @classmethod
@@ -400,12 +408,22 @@ class TestWebUIBrowserAcceptance(unittest.TestCase):
         self._run_async(run())
 
     def test_08_direct_download_endpoints_and_csp_enforcement(self):
-        """Direct browser fetches to unapproved package downloads return honest error or draft status."""
+        """Direct browser fetches to unapproved package downloads return honest error and enforce CSP (R4)."""
         async def run():
             with fixture(paused=True) as f, serving(f.gw) as server:
                 sign_attestation(f)
                 port = server.server_address[1]
                 token = server.bearer_token
+
+                # 1. Assert strict Content-Security-Policy headers on responses
+                import urllib.request
+                req = urllib.request.Request(f"http://127.0.0.1:{port}/")
+                req.add_header("Authorization", f"Bearer {token}")
+                with urllib.request.urlopen(req, timeout=3.0) as resp:
+                    csp = resp.headers.get("Content-Security-Policy", "")
+                    self.assertIn("default-src 'none'", csp)
+                    self.assertIn("connect-src 'self'", csp)
+                    self.assertIn("frame-ancestors 'none'", csp)
 
                 target_id, ws, send, eval_js = await self._open_tab_and_session()
                 try:
@@ -414,7 +432,7 @@ class TestWebUIBrowserAcceptance(unittest.TestCase):
                     await eval_js(f"document.getElementById('token').value = {json.dumps(token)}; document.getElementById('btn-login').click();")
                     await asyncio.sleep(1.2)
 
-                    # Fetch non-existent client export from inside browser context
+                    # 2. Fetch unapproved/non-existent client export from inside browser context
                     fetch_res = await eval_js(
                         """(async () => {
                             const res = await fetch('/api/clients/nonexistent-client/export-csv', {

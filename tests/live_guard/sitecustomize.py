@@ -39,10 +39,31 @@ if os.environ.get("AGI_LIVE_EXECUTION_ALLOWED") != "1":
         raise RuntimeError(f"LIVE NETWORK BLOCKED in {os.environ.get('AGI_TEST_TIER', 'default')} "
                            f"test tier: attempted {address!r}")
 
+    _real_create_connection = socket.create_connection
+
     def _blocked_create_connection(address, *args, **kwargs):
+        if isinstance(address, tuple) and address[0] in {"127.0.0.1", "::1"} and address[1] != 11434:
+            return _real_create_connection(address, *args, **kwargs)
         raise RuntimeError(f"LIVE NETWORK BLOCKED in {os.environ.get('AGI_TEST_TIER', 'default')} "
                            f"test tier: attempted {address!r}")
 
     subprocess.Popen = GuardedPopen
     socket.socket.connect = _blocked_connect
     socket.create_connection = _blocked_create_connection
+
+    try:
+        import win32cred  # type: ignore[import-untyped]
+        _real_cred_write = win32cred.CredWrite
+
+        def _guarded_cred_write(credential, flags=0):
+            target = credential.get("TargetName", "") if isinstance(credential, dict) else ""
+            if "operator_key" in str(target).lower():
+                raise RuntimeError(
+                    f"CREDENTIAL STORE WRITE BLOCKED in {os.environ.get('AGI_TEST_TIER', 'default')} "
+                    f"test tier: attempted {target}"
+                )
+            return _real_cred_write(credential, flags)
+
+        win32cred.CredWrite = _guarded_cred_write
+    except (ImportError, Exception):
+        pass

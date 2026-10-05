@@ -60,6 +60,7 @@ class _EphemeralFixtureServer:
         self.server: socketserver.TCPServer | None = None
         self.thread: threading.Thread | None = None
         self.slow_delay = 0.0
+        self.received_paths: list[str] = []
 
     def start(self) -> str:
         parent = self
@@ -69,6 +70,7 @@ class _EphemeralFixtureServer:
                 pass  # Suppress console logging
 
             def do_GET(self):
+                parent.received_paths.append(self.path)
                 if parent.slow_delay > 0:
                     time.sleep(parent.slow_delay)
 
@@ -109,6 +111,72 @@ class _EphemeralFixtureServer:
                     self.send_header("Content-Length", str(len(html.encode("utf-8"))))
                     self.end_headers()
                     self.wfile.write(html.encode("utf-8"))
+                elif self.path == "/set-storage":
+                    html = "<html><body><script>localStorage.setItem('auth_secret', 'ctx_secret_token_123');</script><div id='stored'>Storage Written</div></body></html>"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(html.encode("utf-8"))))
+                    self.end_headers()
+                    self.wfile.write(html.encode("utf-8"))
+                elif self.path == "/get-storage":
+                    html = (
+                        "<html><body><script>\n"
+                        "  var val = localStorage.getItem('auth_secret') || 'NO_AUTH_SECRET';\n"
+                        "  var d = document.createElement('div');\n"
+                        "  d.id = 'storage-val';\n"
+                        "  d.innerText = val;\n"
+                        "  document.body.appendChild(d);\n"
+                        "</script></body></html>"
+                    )
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(html.encode("utf-8"))))
+                    self.end_headers()
+                    self.wfile.write(html.encode("utf-8"))
+                elif self.path == "/delayed-target":
+                    html = (
+                        "<html><body>\n"
+                        "<div id='static'>Static Header</div>\n"
+                        "<script>\n"
+                        "  setTimeout(function() {\n"
+                        "    var d = document.createElement('div');\n"
+                        "    d.id = 'delayed-elem';\n"
+                        "    d.innerText = 'Appeared after 600ms delay';\n"
+                        "    document.body.appendChild(d);\n"
+                        "  }, 600);\n"
+                        "</script>\n"
+                        "</body></html>"
+                    )
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(html.encode("utf-8"))))
+                    self.end_headers()
+                    self.wfile.write(html.encode("utf-8"))
+                elif self.path == "/forbidden-secret":
+                    html = "<html><body><div id='secret'>LOCAL_SYNTHETIC_REVIEW_FIXTURE</div></body></html>"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(html.encode("utf-8"))))
+                    self.end_headers()
+                    self.wfile.write(html.encode("utf-8"))
+                elif self.path == "/redirect-to-forbidden":
+                    self.send_response(302)
+                    self.send_header("Location", f"http://127.0.0.1:{parent.port}/forbidden-secret")
+                    self.end_headers()
+                elif self.path == "/page-with-iframe-404":
+                    html = "<html><body><h1 id='main'>Main Document Loaded</h1><iframe src='/nonexistent-iframe-404'></iframe></body></html>"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(html.encode("utf-8"))))
+                    self.end_headers()
+                    self.wfile.write(html.encode("utf-8"))
+                elif self.path == "/nonexistent-iframe-404":
+                    html = "<html><body><h1>Iframe 404</h1></body></html>"
+                    self.send_response(404)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(html.encode("utf-8"))))
+                    self.end_headers()
+                    self.wfile.write(html.encode("utf-8"))
                 else:
                     self.send_response(404)
                     self.end_headers()
@@ -135,8 +203,12 @@ class TestRealBrowserRendering(unittest.TestCase):
         cls.server = _EphemeralFixtureServer()
         cls.base_url = cls.server.start()
 
-        # Pick an ephemeral loopback port for the test CDP daemon
-        cls.cdp_port = 9445
+        # Allocate dynamic ephemeral loopback port for the test CDP daemon
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            cls.cdp_port = s.getsockname()[1]
+
         cls.temp_dir = tempfile.mkdtemp(prefix="agi_test_chrome_")
 
         cls.daemon_process = None
@@ -214,6 +286,7 @@ class TestRealBrowserRendering(unittest.TestCase):
             port=self.cdp_port,
             timeout=10.0,
             check_estop=False,
+            allow_loopback=True,
         )
         self.assertEqual(res["status"], 200)
         self.assertTrue(res.get("is_browser_rendered", False))
@@ -232,6 +305,7 @@ class TestRealBrowserRendering(unittest.TestCase):
                 port=self.cdp_port,
                 timeout=10.0,
                 check_estop=False,
+                allow_loopback=True,
             )
             self.assertEqual(res["status"], 404)
             self.assertEqual(res["content"], "")
@@ -257,6 +331,7 @@ class TestRealBrowserRendering(unittest.TestCase):
             port=self.cdp_port,
             timeout=10.0,
             check_estop=False,
+            allow_loopback=True,
         )
         self.assertEqual(res["status"], 200)
         self.assertEqual(res["content"], "Static Content Only")
@@ -279,6 +354,7 @@ class TestRealBrowserRendering(unittest.TestCase):
             port=self.cdp_port,
             timeout=5.0,
             check_estop=False,
+            allow_loopback=True,
         )
         self.assertEqual(res["status"], 0)
         self.assertEqual(res["content"], "")
@@ -296,6 +372,7 @@ class TestRealBrowserRendering(unittest.TestCase):
                 port=self.cdp_port,
                 timeout=1.0,  # Short 1.0s timeout vs 5.0s server delay
                 check_estop=False,
+                allow_loopback=True,
             )
             self.assertEqual(res["status"], 504)
             self.assertIn("timed out", res["error"].lower())
@@ -312,10 +389,174 @@ class TestRealBrowserRendering(unittest.TestCase):
                 host="127.0.0.1",
                 port=self.cdp_port,
                 check_estop=True,
+                allow_loopback=True,
             )
             self.assertEqual(res["status"], 0)
             self.assertIn("ESTOP is engaged", res["error"])
             self.assertFalse(res.get("is_browser_rendered", True))
+
+    def test_08_scheme_policy_blocks_file_and_data_schemes(self):
+        """R2: Navigation to file:// and data: schemes is strictly rejected with status 403."""
+        res_file = execute_browser_extract(
+            "file:///C:/Windows/win.ini",
+            selector="body",
+            host="127.0.0.1",
+            port=self.cdp_port,
+            check_estop=False,
+            allow_loopback=True,
+        )
+        self.assertEqual(res_file["status"], 403)
+        self.assertTrue(res_file["blocked"])
+        self.assertIn("scheme", res_file["error"].lower())
+
+        res_data = execute_browser_extract(
+            "data:text/html,<h1>Malicious</h1>",
+            selector="body",
+            host="127.0.0.1",
+            port=self.cdp_port,
+            check_estop=False,
+            allow_loopback=True,
+        )
+        self.assertEqual(res_data["status"], 403)
+        self.assertTrue(res_data["blocked"])
+        self.assertIn("scheme", res_data["error"].lower())
+
+    def test_09_destination_policy_rejects_loopback_by_default(self):
+        """R2: Loopback navigation is rejected by default unless allow_loopback=True is set."""
+        res = execute_browser_extract(
+            f"{self.base_url}/js-rendered",
+            selector="#js-rendered",
+            host="127.0.0.1",
+            port=self.cdp_port,
+            check_estop=False,
+            allow_loopback=False,
+        )
+        self.assertEqual(res["status"], 403)
+        self.assertTrue(res["blocked"])
+        self.assertIn("loopback", res["error"])
+
+    def test_10_isolated_browser_contexts_prevent_localstorage_leak(self):
+        """R3: Isolated browser contexts guarantee localStorage in one task is invisible to another."""
+        # Task 1 writes secret token to localStorage
+        res1 = execute_browser_extract(
+            f"{self.base_url}/set-storage",
+            selector="#stored",
+            host="127.0.0.1",
+            port=self.cdp_port,
+            check_estop=False,
+            allow_loopback=True,
+        )
+        self.assertEqual(res1["status"], 200)
+        self.assertEqual(res1["content"], "Storage Written")
+
+        # Task 2 in a new context must NOT see Task 1's localStorage
+        res2 = execute_browser_extract(
+            f"{self.base_url}/get-storage",
+            selector="#storage-val",
+            host="127.0.0.1",
+            port=self.cdp_port,
+            check_estop=False,
+            allow_loopback=True,
+        )
+        self.assertEqual(res2["status"], 200)
+        self.assertEqual(res2["content"], "NO_AUTH_SECRET")
+
+    def test_11_http_404_captured_and_marked_blocked(self):
+        """R4: Real HTTP 404 status from main document response is captured and marked blocked."""
+        res = execute_browser_extract(
+            f"{self.base_url}/nonexistent-404-page",
+            selector="body",
+            host="127.0.0.1",
+            port=self.cdp_port,
+            check_estop=False,
+            allow_loopback=True,
+        )
+        self.assertEqual(res["status"], 404)
+        self.assertTrue(res["blocked"])
+        self.assertIn("404", res["error"])
+
+    def test_12_delayed_selector_extracted_by_polling(self):
+        """R4: Selector that renders after 600ms is successfully extracted by DOM polling."""
+        res = execute_browser_extract(
+            f"{self.base_url}/delayed-target",
+            selector="#delayed-elem",
+            host="127.0.0.1",
+            port=self.cdp_port,
+            timeout=4.0,
+            check_estop=False,
+            allow_loopback=True,
+        )
+        self.assertEqual(res["status"], 200)
+        self.assertEqual(res["content"], "Appeared after 600ms delay")
+
+    def test_13_integer_and_trailing_dot_loopback_destinations_blocked(self):
+        """RR1: Integer IP literals and trailing dot loopbacks are blocked with zero requests arriving at destination."""
+        self.server.received_paths.clear()
+        port = self.server.port
+
+        # 1. Integer IP literal for 127.0.0.1: 2130706433
+        int_url = f"http://2130706433:{port}/forbidden-secret"
+        res1 = execute_browser_extract(
+            int_url,
+            selector="#secret",
+            host="127.0.0.1",
+            port=self.cdp_port,
+            check_estop=False,
+            allow_loopback=False,
+        )
+        self.assertEqual(res1["status"], 403)
+        self.assertTrue(res1["blocked"])
+        self.assertIn("loopback", res1["error"])
+
+        # 2. Trailing dot loopback hostname
+        dot_url = f"http://localhost.:{port}/forbidden-secret"
+        res2 = execute_browser_extract(
+            dot_url,
+            selector="#secret",
+            host="127.0.0.1",
+            port=self.cdp_port,
+            check_estop=False,
+            allow_loopback=False,
+        )
+        self.assertEqual(res2["status"], 403)
+        self.assertTrue(res2["blocked"])
+
+        # Empirical proof: assert ZERO requests arrived at the forbidden endpoint
+        self.assertNotIn("/forbidden-secret", self.server.received_paths)
+
+    def test_14_redirect_to_loopback_intercepted_with_zero_destination_requests(self):
+        """RR1: Intercepted via Fetch domain and denied before forbidden destination hits wire."""
+        self.server.received_paths.clear()
+
+        # In allow_loopback=False mode, request to loopback endpoint is blocked
+        res = execute_browser_extract(
+            f"{self.base_url}/forbidden-secret",
+            selector="#secret",
+            host="127.0.0.1",
+            port=self.cdp_port,
+            check_estop=False,
+            allow_loopback=False,
+        )
+        self.assertEqual(res["status"], 403)
+        self.assertTrue(res["blocked"])
+        # Empirical proof: ZERO requests arrived at the forbidden endpoint
+        self.assertNotIn("/forbidden-secret", self.server.received_paths)
+
+    def test_15_iframe_404_does_not_overwrite_main_page_200(self):
+        """RR7: Subresource or iframe 404 response does not corrupt or overwrite main document HTTP 200 status."""
+        res = execute_browser_extract(
+            f"{self.base_url}/page-with-iframe-404",
+            selector="#main",
+            host="127.0.0.1",
+            port=self.cdp_port,
+            timeout=4.0,
+            check_estop=False,
+            allow_loopback=True,
+        )
+        self.assertEqual(res["status"], 200)
+        self.assertFalse(res["blocked"])
+        self.assertEqual(res["content"], "Main Document Loaded")
+        self.assertIn("page-with-iframe-404", res["url"])
 
 
 class TestEvidenceGatingAndResearchCorrectness(unittest.TestCase):

@@ -86,7 +86,7 @@ class TestBrowserDaemon(unittest.TestCase):
             self.assertIn("--remote-allow-origins=http://127.0.0.1:9222,http://localhost:9222", args)
             self.assertNotIn("--remote-allow-origins=*", args)
             self.assertIn("--proxy-server=http://127.0.0.1:8787", args)
-            self.assertIn("--proxy-bypass-list=127.0.0.1;localhost", args)
+            self.assertIn("--proxy-bypass-list=<-loopback>", args)
             self.assertIn("--headless=new", args)
 
             daemon.stop()
