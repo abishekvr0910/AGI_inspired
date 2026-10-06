@@ -1,25 +1,25 @@
 {
  "schema_version": 2,
- "brief_revision": 194,
- "created_at": "2026-10-06T10:10:00+00:00",
+ "brief_revision": 195,
+ "created_at": "2026-10-06T10:45:00+00:00",
  "status": "completed",
  "repository": {
   "branch": "master",
   "upstream": "origin/master",
   "tree_clean": true,
   "changed_paths": [],
-  "based_on_head": "19ee3935e2acd74d108b3c3eaaecf477be864f4c"
+  "based_on_head": "7745f18958f998e557879212ee1e40b07a2b621e"
  },
  "task": {
-  "id": "STAGE6-AUDIT-TOOLING-COMPLETE-2026-10-06",
-  "phase": "tooling_complete",
+  "id": "STAGE7-GOOGLE-ADS-EDITOR-CSV-REPAIR-2026-10-06",
+  "phase": "remediation_and_inspection_complete",
   "status": "completed",
-  "next_action": "Stage 7: Consented client pilot inspection and offline Google Ads Editor bulk CSV validation."
+  "next_action": "Stage 7 standalone clean-machine verification and pilot deployment review."
  },
  "completed": [
-  "108/108 full gate green (90 unit, 8 containment, 10 integration, exit 0). Stage 6 tooling complete.",
-  "Committed C1-C5 and Stage 6 audit retention tooling, agi audit subcommands, tests, and formal review.",
-  "Tree clean. 299 monitored artifacts unchanged. ESTOP engaged. Write ownership released."
+  "108/108 full gate green (90 unit, 8 containment, 10 integration, exit 0). Stage 7 CSV repair complete.",
+  "Remediated Google Ads Editor bulk CSV defects: row 1 authoritative headers, uniform 25 columns, word-boundary truncation, concise natural Polish copy.",
+  "Monitored artifacts 299/299 hash-identical. ESTOP strictly engaged. Write ownership released."
  ],
  "locked_constraints": [
   "Keep ESTOP engaged; no live provider/cohort without controlled-window authority.",
@@ -28,7 +28,7 @@
  ],
  "gate": {
   "status": "passed",
-  "detail": "108/108 suites, exit 0. Stage 6 audit_tool 12/12 pass, zero skips."
+  "detail": "108/108 suites, exit 0. Campaign builder regression 15/15 pass, zero skips."
  },
  "references": [
   {
@@ -41,11 +41,11 @@
   },
   {
    "path": "docs/CURRENT_STATE.md",
-   "sha256": "4d0b5bb829ca3bb6f36450414e9dbabfe0986e9f44a6e4a4974b06a4f791e03d"
+   "sha256": "38da8ae92633df024bf3d0b184365ba15d00a84e094143dba6e270e719a31e66"
   },
   {
    "path": "docs/ACTIVE_WORK.json",
-   "sha256": "7bae27d7b5e3958676a73a5a23f9ea23776fbdbee4bbb29ec92a75c21bbe45f0"
+   "sha256": "2549dd553bcff20c5c03db9cb7d02a70108d9a9c62815416ce9bd721a8044213"
   },
   {
    "path": "orchestrator/execution.py",
