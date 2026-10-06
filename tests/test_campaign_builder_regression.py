@@ -207,6 +207,121 @@ class CampaignBuilderRegressionTests(unittest.TestCase):
         self.assertNotIn("Satisfaction guaranteed on every project.", clean_d)
         self.assertNotIn("100% money back guarantee.", clean_d)
 
+    def test_truncate_to_word_boundary_behavior(self):
+        """truncate_to_word_boundary avoids slicing mid-word and completes punctuation."""
+        from campaign_builder import truncate_to_word_boundary
+
+        # 1. Below or equal to limit returns unchanged
+        self.assertEqual(truncate_to_word_boundary("Short Text", 30), "Short Text")
+        self.assertEqual(truncate_to_word_boundary("Exactly Thirty Chars Long! 123", 30), "Exactly Thirty Chars Long! 123")
+
+        # 2. Over limit truncates at previous word boundary
+        h = truncate_to_word_boundary("El Shaddai Indian Coffee Online", 30)
+        self.assertLessEqual(len(h), 30)
+        self.assertEqual(h, "El Shaddai Indian Coffee")
+
+        # 3. Description truncation ensures proper terminal punctuation
+        d = truncate_to_word_boundary(
+            "Poznaj oferte El Shaddai Indian Coffee. Sprawdz szczegoly na naszej oficjalnej stronie internetowej.",
+            90,
+            ensure_punctuation=True,
+        )
+        self.assertLessEqual(len(d), 90)
+        self.assertTrue(d.endswith("."))
+        self.assertFalse(d.endswith(" int."))
+        self.assertFalse(d.endswith(" int"))
+
+        # 4. Truncation avoids dangling conjunctions
+        d2 = truncate_to_word_boundary(
+            "Zapraszamy do kontaktu z El Shaddai Indian Coffee. Oferujemy szeroki asortyment i profesjonalne podejscie.",
+            90,
+            ensure_punctuation=True,
+        )
+        self.assertLessEqual(len(d2), 90)
+        self.assertTrue(d2.endswith("."))
+        self.assertNotIn("profesjo", d2)
+        self.assertNotIn(" i.", d2)
+
+    def test_polish_defaults_character_bounds_and_naturalness(self):
+        """Polish defaults avoid mid-word slicing and stay within character limits."""
+        pl_profile = {
+            "client_id": "el-shaddai-coffee-katowice",
+            "display_name": "El Shaddai Indian Coffee",
+            "domain": "specialty coffee roastery",
+            "language": ["pl"],
+            "landing_url": "https://elshaddaicoffee.pl",
+        }
+        campaign = campaign_builder.build_campaign_from_research(
+            client_profile=pl_profile,
+            keywords=self.keywords,
+            verified_for_export=False,
+        )
+
+        for ag in campaign.ad_groups:
+            for ad in ag.ads:
+                self.assertEqual(len(ad.headlines), 15)
+                # Check uniqueness of headlines
+                self.assertEqual(len(set(h.lower() for h in ad.headlines)), 15)
+                for h in ad.headlines:
+                    self.assertLessEqual(len(h), 30, f"Headline '{h}' exceeds 30 chars")
+                    self.assertFalse(h.endswith("Onlin"), f"Headline '{h}' sliced mid-word")
+
+                self.assertEqual(len(ad.descriptions), 4)
+                for d in ad.descriptions:
+                    self.assertLessEqual(len(d), 90, f"Description '{d}' exceeds 90 chars")
+                    self.assertTrue(d.endswith((".", "!", "?")), f"Description '{d}' lacks terminal punctuation")
+                    self.assertFalse(d.endswith(" int."), f"Description '{d}' has mid-word slice 'int.'")
+                    self.assertFalse(d.endswith(" profesjo."), f"Description '{d}' has mid-word slice 'profesjo.'")
+                    self.assertFalse(d.endswith(" ora."), f"Description '{d}' has mid-word slice 'ora.'")
+
+    def test_csv_uniform_25_columns_and_row1_headers(self):
+        """Google Ads Editor CSV exports have uniform 25 columns and row 1 headers."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            
+            # 1. Draft/sample export
+            sample_csv = tmp / "sample_campaign.csv"
+            sample_camp = campaign_builder.build_campaign_from_research(
+                client_profile=self.profile,
+                keywords=self.keywords,
+                verified_for_export=False,
+            )
+            campaign_builder.export_google_ads_editor_csv(sample_camp, sample_csv)
+
+            with open(sample_csv, "r", encoding="utf-8", newline="") as f:
+                reader = list(csv.reader(f))
+            self.assertGreater(len(reader), 2)
+            # Row 1 MUST be headers
+            self.assertEqual(reader[0][0], "Campaign")
+            self.assertEqual(reader[0][1], "Ad Group")
+            self.assertEqual(len(reader[0]), 25)
+            # Row 2 is sample disclaimer with 25 columns
+            self.assertTrue(reader[1][0].startswith("# SAMPLE"))
+            self.assertEqual(len(reader[1]), 25)
+            # All remaining data rows must have exactly 25 columns
+            for i, row in enumerate(reader):
+                self.assertEqual(len(row), 25, f"Row {i} in sample CSV has {len(row)} columns instead of 25")
+
+            # 2. Verified export
+            verified_csv = tmp / "verified_campaign.csv"
+            verified_camp = campaign_builder.build_campaign_from_research(
+                client_profile=self.profile,
+                keywords=self.keywords,
+                verified_for_export=True,
+            )
+            campaign_builder.export_google_ads_editor_csv(verified_camp, verified_csv)
+
+            with open(verified_csv, "r", encoding="utf-8", newline="") as f:
+                v_reader = list(csv.reader(f))
+            self.assertGreater(len(v_reader), 1)
+            # Row 1 MUST be headers
+            self.assertEqual(v_reader[0][0], "Campaign")
+            self.assertEqual(len(v_reader[0]), 25)
+            # No comment row in verified export
+            self.assertFalse(v_reader[1][0].startswith("#"))
+            for i, row in enumerate(v_reader):
+                self.assertEqual(len(row), 25, f"Row {i} in verified CSV has {len(row)} columns instead of 25")
+
 
 class EvidenceGateTests(unittest.TestCase):
     """Tests for the commercial evidence gate."""

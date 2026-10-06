@@ -120,6 +120,65 @@ def sanitize_theme_name(text: str) -> str:
     return " ".join(w.capitalize() for w in words[:4]) or "General"
 
 
+def deduplicate_preserve_order(items: list[str]) -> list[str]:
+    """Deduplicate strings preserving case and original order."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        clean = item.strip()
+        norm = clean.lower()
+        if norm and norm not in seen:
+            seen.add(norm)
+            result.append(clean)
+    return result
+
+
+def truncate_to_word_boundary(text: str, max_length: int, ensure_punctuation: bool = False) -> str:
+    """Truncate text to max_length without slicing words in half.
+    
+    If ensure_punctuation is True (for descriptions), ensures the text terminates
+    with appropriate sentence punctuation ('.', '!', or '?').
+    """
+    clean = str(text or "").strip()
+    if not clean:
+        return ""
+    if len(clean) <= max_length:
+        if ensure_punctuation and not clean.endswith((".", "!", "?")):
+            if len(clean) + 1 <= max_length:
+                return clean + "."
+        return clean
+
+    # Sliced candidate
+    sliced = clean[:max_length].rstrip()
+
+    # Check if the split happened on whitespace or punctuation boundary
+    if len(clean) > max_length and clean[max_length] in (" ", "\t", "\n", ".", ",", ";", ":", "!", "?"):
+        result = sliced.rstrip(" ,;:-")
+    elif " " in sliced:
+        truncated = sliced.rsplit(" ", 1)[0].rstrip(" ,;:-")
+        # Remove trailing dangling short prepositions / conjunctions (PL & EN)
+        dangling = (
+            "i", "a", "o", "u", "w", "z", "ze", "do", "na", "po", "od", "za",
+            "and", "or", "the", "in", "on", "at", "to", "for", "of", "with", "by",
+        )
+        words = truncated.split()
+        if len(words) > 1 and words[-1].lower() in dangling:
+            truncated = truncated.rsplit(" ", 1)[0].rstrip(" ,;:-")
+        result = truncated if truncated else sliced
+    else:
+        result = sliced
+
+    if ensure_punctuation and result:
+        result = result.rstrip(" ,;:-")
+        if not result.endswith((".", "!", "?")):
+            if len(result) + 1 <= max_length:
+                result = result + "."
+            elif " " in result:
+                result = result.rsplit(" ", 1)[0].rstrip(" ,;:-") + "."
+
+    return result
+
+
 def _contains_forbidden_claim(text: str, forbidden_claims: list[str]) -> bool:
     """Check if text contains any forbidden claim (case-insensitive)."""
     text_lower = text.lower()
@@ -194,58 +253,102 @@ def build_campaign_from_research(
     lang = (client_profile.get("language") or ["en"])[0].lower() if client_profile.get("language") else "en"
 
     if lang == "pl":
+        h13 = (
+            f"{display_name} Online"
+            if len(f"{display_name} Online") <= MAX_HEADLINE_LENGTH
+            else "Sprawdz Oferte Online"
+        )
         default_headlines = [
-            f"{display_name}"[:MAX_HEADLINE_LENGTH],
-            f"Oficjalna Strona"[:MAX_HEADLINE_LENGTH],
-            f"Poznaj Nasza Oferte"[:MAX_HEADLINE_LENGTH],
-            f"Skontaktuj Sie Z Nami"[:MAX_HEADLINE_LENGTH],
-            f"Sprawdz Nasz Katalog"[:MAX_HEADLINE_LENGTH],
-            f"Wysoka Jakosc Produktow"[:MAX_HEADLINE_LENGTH],
-            f"Oferta Online"[:MAX_HEADLINE_LENGTH],
-            f"Dowiedz Sie Wiecej"[:MAX_HEADLINE_LENGTH],
-            f"Szeroki Wybor"[:MAX_HEADLINE_LENGTH],
-            f"Zamow Online"[:MAX_HEADLINE_LENGTH],
-            f"Oryginalne Produkty"[:MAX_HEADLINE_LENGTH],
-            f"Sprawdz Szczegoly"[:MAX_HEADLINE_LENGTH],
-            f"{display_name} Online"[:MAX_HEADLINE_LENGTH],
-            f"Kontakt I Informacje"[:MAX_HEADLINE_LENGTH],
-            f"Zobacz Nowosci"[:MAX_HEADLINE_LENGTH],
+            truncate_to_word_boundary(f"{display_name}", MAX_HEADLINE_LENGTH),
+            "Oficjalna Strona",
+            "Poznaj Nasza Oferte",
+            "Skontaktuj Sie Z Nami",
+            "Sprawdz Nasz Katalog",
+            "Wysoka Jakosc Produktow",
+            "Oferta Online",
+            "Dowiedz Sie Wiecej",
+            "Szeroki Wybor",
+            "Zamow Online",
+            "Oryginalne Produkty",
+            "Sprawdz Szczegoly",
+            truncate_to_word_boundary(h13, MAX_HEADLINE_LENGTH),
+            "Kontakt I Informacje",
+            "Zobacz Nowosci",
         ]
         default_descriptions = [
-            f"Poznaj oferte {display_name}. Sprawdz szczegoly na naszej oficjalnej stronie internetowej."[:MAX_DESCRIPTION_LENGTH],
-            f"Zapraszamy do kontaktu z {display_name}. Oferujemy szeroki asortyment i profesjonalne podejscie."[:MAX_DESCRIPTION_LENGTH],
-            f"Szukasz sprawdzonych rozwiazan? Dowiedz sie wiecej o ofercie dopasowanej do Twoich potrzeb."[:MAX_DESCRIPTION_LENGTH],
-            f"Odwiedz oficjalna strone {display_name} i sprawdz aktualny katalog produktow oraz kontakt."[:MAX_DESCRIPTION_LENGTH],
+            truncate_to_word_boundary(
+                f"Poznaj oferte {display_name}. Sprawdz szczegoly na naszej oficjalnej stronie.",
+                MAX_DESCRIPTION_LENGTH,
+                ensure_punctuation=True,
+            ),
+            truncate_to_word_boundary(
+                f"Skontaktuj sie z {display_name}. Zapewniamy bogaty wybor i fachowe doradztwo.",
+                MAX_DESCRIPTION_LENGTH,
+                ensure_punctuation=True,
+            ),
+            truncate_to_word_boundary(
+                "Szukasz sprawdzonych rozwiazan? Dowiedz sie wiecej o ofercie dopasowanej do potrzeb.",
+                MAX_DESCRIPTION_LENGTH,
+                ensure_punctuation=True,
+            ),
+            truncate_to_word_boundary(
+                f"Odwiedz strone {display_name} i sprawdz nasz aktualny katalog produktow.",
+                MAX_DESCRIPTION_LENGTH,
+                ensure_punctuation=True,
+            ),
         ]
     else:
+        h14 = (
+            f"{display_name} Online"
+            if len(f"{display_name} Online") <= MAX_HEADLINE_LENGTH
+            else "Shop Online Today"
+        )
         default_headlines = [
-            f"{display_name}"[:MAX_HEADLINE_LENGTH],
-            f"Official Website"[:MAX_HEADLINE_LENGTH],
-            f"Explore Our Offerings"[:MAX_HEADLINE_LENGTH],
-            f"Learn More Today"[:MAX_HEADLINE_LENGTH],
-            f"Contact Our Team"[:MAX_HEADLINE_LENGTH],
-            f"View Products & Services"[:MAX_HEADLINE_LENGTH],
-            f"Dedicated Customer Care"[:MAX_HEADLINE_LENGTH],
-            f"Discover Options Online"[:MAX_HEADLINE_LENGTH],
-            f"Quality & Commitment"[:MAX_HEADLINE_LENGTH],
-            f"Inquire Online"[:MAX_HEADLINE_LENGTH],
-            f"Connect With Us"[:MAX_HEADLINE_LENGTH],
-            f"Schedule A Consultation"[:MAX_HEADLINE_LENGTH],
-            f"Browse Our Selection"[:MAX_HEADLINE_LENGTH],
-            f"{display_name} Online"[:MAX_HEADLINE_LENGTH],
-            f"Find What You Need"[:MAX_HEADLINE_LENGTH],
+            truncate_to_word_boundary(f"{display_name}", MAX_HEADLINE_LENGTH),
+            "Official Website",
+            "Explore Our Offerings",
+            "Learn More Today",
+            "Contact Our Team",
+            "View Products & Services",
+            "Dedicated Customer Care",
+            "Discover Options Online",
+            "Quality & Commitment",
+            "Inquire Online",
+            "Connect With Us",
+            "Schedule A Consultation",
+            "Browse Our Selection",
+            truncate_to_word_boundary(h14, MAX_HEADLINE_LENGTH),
+            "Find What You Need",
         ]
         default_descriptions = [
-            f"Discover {display_name}. Explore our offerings and learn more on our official website."[:MAX_DESCRIPTION_LENGTH],
-            f"Welcome to {display_name}. Browse our selection and connect with our team today."[:MAX_DESCRIPTION_LENGTH],
-            f"Learn more about solutions tailored to your needs from {display_name}."[:MAX_DESCRIPTION_LENGTH],
-            f"Contact {display_name} online to explore our catalog, services, and consultation options."[:MAX_DESCRIPTION_LENGTH],
+            truncate_to_word_boundary(
+                f"Discover {display_name}. Explore our full selection on our official website.",
+                MAX_DESCRIPTION_LENGTH,
+                ensure_punctuation=True,
+            ),
+            truncate_to_word_boundary(
+                f"Welcome to {display_name}. Connect with our team and browse our offerings today.",
+                MAX_DESCRIPTION_LENGTH,
+                ensure_punctuation=True,
+            ),
+            truncate_to_word_boundary(
+                f"Tailored solutions from {display_name}. Learn more and request a consultation.",
+                MAX_DESCRIPTION_LENGTH,
+                ensure_punctuation=True,
+            ),
+            truncate_to_word_boundary(
+                f"Visit {display_name} online to explore our catalog, services, and special offers.",
+                MAX_DESCRIPTION_LENGTH,
+                ensure_punctuation=True,
+            ),
         ]
 
     # Filter forbidden claims from defaults BEFORE use
     default_headlines, default_descriptions = filter_forbidden_claims(
         default_headlines, default_descriptions, forbidden_claims
     )
+    default_headlines = deduplicate_preserve_order(default_headlines)
+    default_descriptions = deduplicate_preserve_order(default_descriptions)
 
     custom_rsa = RSAAd(headlines=list(default_headlines), descriptions=list(default_descriptions), final_url=landing_url)
     if ad_copies:
@@ -256,32 +359,42 @@ def build_campaign_from_research(
             h_list = copy_entry.get("headlines") or []
             d_list = copy_entry.get("descriptions") or []
             if h_list:
-                cleaned_h = [str(h).strip()[:MAX_HEADLINE_LENGTH] for h in h_list if str(h).strip() and len(str(h).strip()) >= 3]
+                cleaned_h = [
+                    truncate_to_word_boundary(str(h), MAX_HEADLINE_LENGTH)
+                    for h in h_list
+                    if str(h).strip() and len(str(h).strip()) >= 3
+                ]
                 cleaned_h = [h for h in cleaned_h if h.lower() not in ("n/a", "none", "null", "-", "--", "``")]
                 # Filter custom headlines for forbidden claims
                 cleaned_h, _ = filter_forbidden_claims(cleaned_h, [], forbidden_claims)
+                cleaned_h = deduplicate_preserve_order(cleaned_h)
                 if cleaned_h:
                     if not verified_for_export:
                         # Supplement with defaults to ensure 15 headlines for Excellent Ad Strength in draft mode only
                         for dh in default_headlines:
                             if len(cleaned_h) >= MAX_RSA_HEADLINES:
                                 break
-                            if dh not in cleaned_h:
+                            if dh.lower() not in {ch.lower() for ch in cleaned_h}:
                                 cleaned_h.append(dh)
                     custom_rsa.headlines = cleaned_h
                 elif verified_for_export:
                     custom_rsa.headlines = []
             if d_list:
-                cleaned_d = [str(d).strip()[:MAX_DESCRIPTION_LENGTH] for d in d_list if str(d).strip() and len(str(d).strip()) >= 5]
+                cleaned_d = [
+                    truncate_to_word_boundary(str(d), MAX_DESCRIPTION_LENGTH, ensure_punctuation=True)
+                    for d in d_list
+                    if str(d).strip() and len(str(d).strip()) >= 5
+                ]
                 cleaned_d = [d for d in cleaned_d if d.lower() not in ("n/a", "none", "null", "-", "--", "``")]
                 # Filter custom descriptions for forbidden claims
                 _, cleaned_d = filter_forbidden_claims([], cleaned_d, forbidden_claims)
+                cleaned_d = deduplicate_preserve_order(cleaned_d)
                 if cleaned_d:
                     if not verified_for_export:
                         for dd in default_descriptions:
                             if len(cleaned_d) >= MAX_RSA_DESCRIPTIONS:
                                 break
-                            if dd not in cleaned_d:
+                            if dd.lower() not in {cd.lower() for cd in cleaned_d}:
                                 cleaned_d.append(dd)
                     custom_rsa.descriptions = cleaned_d
                 elif verified_for_export:
@@ -412,14 +525,14 @@ def export_google_ads_editor_csv(campaign: Campaign, target_path: Path | str) ->
     with open(p, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         
-        # Add sample warning as first row if not verified
+        # Row 1: Authoritative column headers
+        writer.writerow(headers)
+
+        # Row 2 (if not verified): Sample disclaimer formatted with exact same column count (25 columns)
         if not is_verified:
             writer.writerow([
                 "# SAMPLE CAMPAIGN - NOT VERIFIED FOR CLIENT USE",
-                "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
-            ])
-        
-        writer.writerow(headers)
+            ] + [""] * (len(headers) - 1))
 
         # 1. Campaign-level negative keywords (always default to Paused)
         for neg in campaign.campaign_negatives:

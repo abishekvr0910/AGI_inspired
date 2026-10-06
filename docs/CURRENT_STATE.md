@@ -1,5 +1,23 @@
 # Canonical Project State - AGI_like Harness
 
+## Stage 7 Google Ads Editor CSV Repair & Consented Client Inspection Landed (2026-10-06)
+
+Stage 7 offline schema inspection and empirical remediation of Google Ads Editor bulk CSV exports has been completed and verified model-free.
+
+- Baseline remains committed on master `a79afa8`; ESTOP engaged (`ESTOP = True`).
+- Defects Remediated in `orchestrator/campaign_builder.py`:
+  1. Header Precedence & Uniform 25-Column Rectangular Layout: Pushed authoritative column headers strictly to line 1 (`writer.writerow(headers)`). Unverified sample disclaimer placed on line 2 with exact matching column count (`len(headers)` = 25 columns). Every row across both sample/draft and verified exports now has uniform 25 columns, eliminating ragged CSV parser failures and restoring automatic Google Ads Editor header mapping.
+  2. Word-Boundary Truncation & Punctuation Guard: Authored `truncate_to_word_boundary()` preventing mid-word syllable slicing across headlines (<= 30 chars) and descriptions (<= 90 chars). Strips dangling short prepositions/conjunctions and guarantees proper terminal punctuation (`.`, `!`, `?`).
+  3. Concise Polish & English Ad Copy Templates: Reformulated default Polish and English templates to fit naturally within character limits without truncation risk. Enforced RSA headline uniqueness via `deduplicate_preserve_order()`.
+- Client Package Inspection (`el-shaddai-coffee-katowice`):
+  - Verified via model-free compilation in disposable tempdir: 14 rows, 25 columns per row, row 1 authoritative headers, 4 RSA ad rows with 15 unique headlines and 4 descriptions ending with periods, 100% `Status: Paused`.
+  - Zero mid-word slicing: eliminated `"Onlin"`, `"int"`, `"profesjo"`, and `"ora"`.
+- Test Suites:
+  - `tests/test_campaign_builder_regression.py` (15/15 PASS, zero skips, added 3 dedicated tests).
+  - Full Model-Free Gate: **108/108 suites green** (90 unit, 8 containment, 10 integration), exit 0, zero skips.
+- Monitored Artifacts: All 299 files in `workspace/clients/`, `workspace/backups/`, `workspace/verifications/`, and `workspace/outbound_pitches/` remain hash-identical (`git status --porcelain workspace/` empty).
+- Next Action: Standalone clean-machine verification of Stage 7 repairs and Stage 7 deployment readiness.
+
 ## Stage 6 Audit Retention & Restore Helper Tooling Landed (2026-10-06)
 
 Stage 6 non-provisioning helper tooling from [`HARNESS_COMPLETION_DIRECTIVE_2026-10-05.md`](HARNESS_COMPLETION_DIRECTIVE_2026-10-05.md) has been implemented and verified model-free.
