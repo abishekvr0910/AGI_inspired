@@ -1016,20 +1016,47 @@ def _render_preflight(data: dict) -> str:
     return "\n".join(lines)
 
 
-_RENDERERS = {"status": _render_status, "health": _render_health,
-             "preflight": _render_preflight}
+def _render_audit_status(data: dict) -> str:
+    import audit_tool
+    return audit_tool.render_evidence(data)
+
+
+def _render_audit_restore(data: dict) -> str:
+    import audit_tool
+    return audit_tool.render_restore(data)
+
+
+def _render_audit_attestation(data: dict) -> str:
+    import audit_tool
+    return audit_tool.render_attestation(data)
+
+
+_RENDERERS = {
+    "status": _render_status,
+    "health": _render_health,
+    "preflight": _render_preflight,
+    "audit_status": _render_audit_status,
+    "audit_restore": _render_audit_restore,
+    "audit_attestation": _render_audit_attestation,
+}
 
 
 def _output(data: dict, as_json: bool) -> int:
     if as_json:
         print(json.dumps(data, indent=2, default=str))
     else:
-        print(_RENDERERS[data["command"]](data))
-    if data["command"] == "preflight":
+        renderer = _RENDERERS.get(data.get("command"))
+        if renderer:
+            print(renderer(data))
+        else:
+            print(json.dumps(data, indent=2, default=str))
+    if data.get("command") == "preflight":
         return 1 if data.get("blockers") else 0
-    if data["command"] == "health":
+    if data.get("command") == "health":
         gate = data.get("test_gate") or {}
         return 0 if gate.get("ok") else 1
+    if str(data.get("command") or "").startswith("audit"):
+        return 0 if data.get("ok") else 1
     return 0
 
 
@@ -1055,15 +1082,58 @@ def main(argv: list[str] | None = None) -> int:
                        help="preflight target")
     p_pre.add_argument("--json", action="store_true", help="stable JSON output")
 
+    p_audit = sub.add_parser("audit", help="off-machine audit retention, replica verification & restore tooling")
+    p_audit_sub = p_audit.add_subparsers(dest="audit_action", required=True)
+
+    p_aud_status = p_audit_sub.add_parser("status", help="audit configuration and replica state")
+    p_aud_status.add_argument("--json", action="store_true", help="stable JSON output")
+
+    p_aud_verify = p_audit_sub.add_parser("verify", help="verify checkpoint chain and artifact digests")
+    p_aud_verify.add_argument("--json", action="store_true", help="stable JSON output")
+
+    p_aud_restore = p_audit_sub.add_parser("restore", help="verify or restore replicated trajectory")
+    p_aud_restore.add_argument("--task-id", type=int, help="Task ID to restore/verify")
+    p_aud_restore.add_argument("--checkpoint-hash", help="Checkpoint hash to restore/verify")
+    p_aud_restore.add_argument("--target-dir", type=Path, help="Target directory for restore")
+    p_aud_restore.add_argument("--write", action="store_true", help="Actually write restored artifact to --target-dir")
+    p_aud_restore.add_argument("--dry-run", action="store_true", default=True, help="Dry-run verification only (default)")
+    p_aud_restore.add_argument("--json", action="store_true", help="stable JSON output")
+
+    p_aud_attest = p_audit_sub.add_parser("attestation", help="validate signed egress boundary attestation")
+    p_aud_attest.add_argument("--token-path", type=Path, help="Path to signed attestation token")
+    p_aud_attest.add_argument("--json", action="store_true", help="stable JSON output")
+
     args = parser.parse_args(argv)
     if args.command == "status":
         data = collect_status()
     elif args.command == "health":
         data = collect_health_model_free()
-    elif args.target == "canary":
-        data = collect_preflight_canary()
+    elif args.command == "preflight":
+        if args.target == "canary":
+            data = collect_preflight_canary()
+        else:
+            data = collect_preflight_release()
+    elif args.command == "audit":
+        import audit_tool
+        if args.audit_action in ("status", "verify"):
+            data = audit_tool.collect_evidence()
+            data["command"] = "audit_status"
+        elif args.audit_action == "restore":
+            dry_run = not args.write
+            data = audit_tool.verify_restore(
+                task_id=args.task_id,
+                checkpoint_hash=args.checkpoint_hash,
+                target_dir=args.target_dir,
+                dry_run=dry_run,
+            )
+            data["command"] = "audit_restore"
+        elif args.audit_action == "attestation":
+            data = audit_tool.validate_attestation(token_path=args.token_path)
+            data["command"] = "audit_attestation"
+        else:
+            data = {"ok": False, "error": f"unknown_audit_action:{args.audit_action}", "command": "audit_error"}
     else:
-        data = collect_preflight_release()
+        raise ValueError(f"Unknown command: {args.command}")
     return _output(data, args.json)
 
 

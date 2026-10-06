@@ -26,6 +26,7 @@ This implements the "Single Recommended Next Implementation" from
 | `agi health --model-free` | Test gate + continuity + DB checks | 0 gate green, 1 gate failed |
 | `agi preflight canary` | Canary prerequisite diagnostic | 0 no blockers, 1 blocked |
 | `agi preflight release` | Release admission diagnostic | 0 no blockers, 1 blocked |
+| `agi audit <action>` | Off-machine audit retention, replica verification & restore tooling | 0 ok, 1 error/blocked |
 
 Every command also accepts `--json` for stable machine-readable output
 (Control App V1 will consume this contract).
@@ -108,13 +109,24 @@ It does not fetch Git, rotate credentials, create backups, or clear ESTOP. Run
 those operational steps separately, then rerun the diagnostic. A PASS is not
 deployment or business approval.
 
+---
+
+### `agi audit`
+
+Non-provisioning operator tooling for off-machine audit retention, replica verification, and egress boundary attestation (Stage 6 of `docs/HARNESS_COMPLETION_DIRECTIVE_2026-10-05.md`):
+
+* **`agi audit status`**: Inspects remote audit retention configuration (UNC or S3 Object Lock), checks enforcement state (`HARNESS_AUDIT_ENFORCE=1`), verifies accessibility of the replica root/bucket, and reports integrity status with credentials redacted.
+* **`agi audit verify`**: Performs comprehensive validation across the remote checkpoint chain, validating all Ed25519 checkpoint signatures, SHA-256 digests of referenced trajectory files, and detecting rewind/truncation attacks via the signed latest manifest.
+* **`agi audit restore [--task-id N] [--checkpoint-hash HASH] [--target-dir DIR] [--write] [--dry-run]`**: Verifies trajectory retrieval and validates content digest against the checkpoint. Defaults to `--dry-run` (read-only verification). When `--write` is specified with `--target-dir`, restores the trajectory with path containment checks and atomic write.
+* **`agi audit attestation [--token-path PATH]`**: Validates the active signed Windows WFP egress boundary token (`.harness/egress_attestation.signed`), verifying Ed25519 signature authenticity, age in hours, TTL remaining (<24h), and required evidence labels (`deny_direct_egress`, `broker_only_egress`, `restricted_worker_identity`).
+
 ## JSON contract
 
 All commands emit stable JSON under `--json`:
 
 ```json
 {
-  "command": "status | health | preflight",
+  "command": "status | health | preflight | audit_status | audit_restore | audit_attestation",
   "generated_at": "<ISO-8601 UTC>",
   ...command-specific sections...
 }

@@ -1,7 +1,20 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-10-05T20:42:22Z",
+  "last_updated": "2026-10-06T09:55:00Z",
   "active_agents": [
+    {
+      "agent": "gemini-cli",
+      "role": "Principal Architect: Stage 6 Audit Retention & Restore Helper Tooling",
+      "task_id": "STAGE6-AUDIT-RETENTION-AND-RESTORE-TOOLING-2026-10-06",
+      "mode": "completed",
+      "owned_paths": [],
+      "started_at": "2026-10-06T09:40:08Z",
+      "last_update": "2026-10-06T09:55:00Z",
+      "status": "completed",
+      "blocked_by": null,
+      "handoff_path": "docs/reviews/GEMINI_STAGE6_AUDIT_TOOLING_REVIEW_2026-10-06.md",
+      "notes": "COMPLETED: Implemented Stage 6 non-provisioning helper commands per HARNESS_COMPLETION_DIRECTIVE_2026-10-05.md: orchestrator/audit_tool.py (collect_evidence, verify_restore, validate_attestation), wired agi audit into orchestrator/operator_cli.py (status, verify, restore, attestation), added tests/test_audit_tool.py (12/12 PASS), registered in tests/tiers.json. Full model-free gate green at 108/108 suites (90 unit, 8 containment, 10 integration, exit 0). 299 monitored artifact files hash-identical. ESTOP engaged; write ownership released."
+    },
     {
       "agent": "hermes",
       "role": "Independent Reviewer: C1-C5 verification + Stage 4 integrated model-free vertical-slice acceptance",

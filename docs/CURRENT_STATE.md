@@ -1,5 +1,20 @@
 # Canonical Project State - AGI_like Harness
 
+## Stage 6 Audit Retention & Restore Helper Tooling Landed (2026-10-06)
+
+Stage 6 non-provisioning helper tooling from [`HARNESS_COMPLETION_DIRECTIVE_2026-10-05.md`](HARNESS_COMPLETION_DIRECTIVE_2026-10-05.md) has been implemented and verified model-free.
+
+- Baseline remains committed on master `da3a252`; ESTOP engaged (`ESTOP = True`).
+- Tooling Implemented:
+  1. `orchestrator/audit_tool.py`: Evidence collection across UNC and S3 Object Lock storage backends, chain verification, truncation/rewind detection, retention floor calculation, and strict credential redaction.
+  2. Restore Verification (`verify_restore`): Verified retrieval of trajectory artifacts against recorded SHA-256 digests (`--dry-run` default). Safe atomic write with directory traversal containment guards.
+  3. Attestation Validation (`validate_attestation`): Validates signed Windows WFP egress boundary token (`.harness/egress_attestation.signed`), reporting Ed25519 signature validity, remaining TTL, and active policy evidence (`deny_direct_egress`, `broker_only_egress`, `restricted_worker_identity`).
+  4. Operator CLI: Integrated `agi audit` subcommands (`status`, `verify`, `restore`, `attestation`) with human-readable and `--json` contracts.
+- Test Suite: `tests/test_audit_tool.py` (12/12 PASS, zero skips, registered under `unit` tier in `tests/tiers.json`).
+- Full Model-Free Gate: **108/108 suites green** (90 unit, 8 containment, 10 integration), exit 0, zero skips.
+- Monitored Artifacts: All 299 files in `workspace/clients/`, `workspace/backups/`, `workspace/verifications/`, and `workspace/outbound_pitches/` remain hash-identical (`git status --porcelain workspace/` empty).
+- Next Action: Stage 6 deployment provisioning (operator configures S3 Object Lock bucket or UNC share to clear `off_machine_audit_retention`) and Stage 7 consented client pilot.
+
 ## Stage 4 Integrated Model-Free Vertical-Slice Acceptance Complete (2026-10-05)
 
 Stage 4 of [`HARNESS_COMPLETION_DIRECTIVE_2026-10-05.md`](HARNESS_COMPLETION_DIRECTIVE_2026-10-05.md) has been implemented and verified model-free. The full product assembly line is proven end-to-end without live API spend.
