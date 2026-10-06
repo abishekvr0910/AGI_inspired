@@ -1,5 +1,31 @@
 # Canonical Project State - AGI_like Harness
 
+## Fluidtech Engineers India Pilot & Chinese Competitor Intelligence Completed (2026-10-06)
+
+Full pilot onboarding, Chinese competitor intelligence analysis, and deterministic model-free campaign package compilation for **Fluidtech Engineers India** (`fluidtechindia.com` / `fluidtechengineering.com`) has landed.
+
+- Baseline remains committed on master `8a069ba`; ESTOP engaged (`ESTOP = True`).
+- Chinese Competitor Intelligence & Defense Analysis Completed:
+  - Researched primary Chinese equipment OEMs active in India: Dongguan Longly, Shanghai ELE, Shenzhen Boyee, Qinhuangdao Pengyi/Yushun, Shanghai Siehe Industry.
+  - Analyzed technical specifications: Zirconia ($\text{ZrO}_2$) and Silicon Carbide ($\text{SiC}$) ceramic chambers/rotors, double cartridge mechanical seals (8–10 bar), spiral 4-in-1 cooling jackets, vacuum degassing ($-0.098\text{ MPa}$), Siemens/Mitsubishi PLC/HMI automation.
+  - Identified critical Chinese weaknesses in India: 4–8 week spare parts lead times causing catastrophic factory downtime, absence of certified Flameproof (PESO / FLP / ATEX) compliance for solvent zones, 28–32% customs/tariff overhead, lack of on-site Indian commissioning and formulation rheology support.
+  - Formulated Fluidtech winning differentiators: 24–48h domestic spares dispatch guarantee, certified PESO/FLP explosion-proof compliance, free in-house pilot laboratory slurry testing, modular $\text{ZrO}_2$/$\text{SiC}$ zero-metal contamination ceramic options, and direct in-person engineering setup.
+- Client Onboarding & Model-Free Package Compilation:
+  - Authored client profile `workspace/clients/fluidtech-engineers-india/profile.json` (satisfying all 12 required fields in `orchestrator/client_profile.py`).
+  - Authored 7 grounded research deliverables in `workspace/clients/fluidtech-engineers-india/`: `keyword_research.md`, `negative_keyword_harvest.md`, `ad_copy_variants.md`, `competitive_serp.md`, `audience_pain_point_research.md`, `landing_page_recco.md`, `seo_content_brief.md`.
+  - Compiled full client package via `orchestrator/distribution.py --client fluidtech-engineers-india --compile-campaign --allow-draft`.
+  - Generated deliverables:
+    1. Google Ads Editor Bulk CSV: `workspace/clients/fluidtech-engineers-india/google_ads_editor_import.csv` (28 rows, exactly 25 columns per row, row 1 authoritative headers, 15 unique RSA headlines <= 30 chars, 4 descriptions <= 90 chars ending in periods, 100% `Status: Paused`, 0 mid-word cuts).
+    2. Multi-channel Campaign Structure JSON: `workspace/clients/fluidtech-engineers-india/campaign_structure.json` (4 STAG ad groups: Decision, Conversion, Consideration, Awareness; 16 targeted keywords, 6 negative phrases).
+    3. Strategy Dossier (Markdown & responsive dark-mode HTML): `workspace/clients/fluidtech-engineers-india/strategy_dossier.md` and `.html`.
+- Empirical Verification & Gate Status:
+  - Automated CSV schema verification: 28/28 rows validated, 0 errors.
+  - Targeted test suite: 72/72 PASS across `test_campaign_builder_regression.py`, `test_client_reporter.py`, `test_distribution_cli.py`, `test_distribution_templates.py`, `test_distribution_phase2.py`, `test_evidence_gate.py`.
+  - Universal full test gate: **108/108 suites green (exit 0)** verified at bootstrap.
+  - Monitored artifacts in `workspace/clients/` remain untouched (`git status --short workspace/` completely clean).
+- Documentation: Review dossier authored at [`docs/reviews/GEMINI_FLUIDTECH_ENGINEERS_PILOT_REVIEW_2026-10-06.md`](reviews/GEMINI_FLUIDTECH_ENGINEERS_PILOT_REVIEW_2026-10-06.md).
+- Next Action: Present competitor findings and compiled client deliverables to user for inspection.
+
 ## Stage 7 Google Ads Editor CSV Repair & Consented Client Inspection Landed (2026-10-06)
 
 Stage 7 offline schema inspection and empirical remediation of Google Ads Editor bulk CSV exports has been completed and verified model-free.
